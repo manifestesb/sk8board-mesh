@@ -1,0 +1,28 @@
+{
+  "name": "@manifeste/sk8board",
+  "version": "0.1.0",
+  "description": "Telemetry-driven 3D skateboard model library",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "peerDependencies": {
+    "gsap": "^3.12.0",
+    "three": "^0.171.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.171.0",
+    "@vitest/coverage-v8": "^3.0.0",
+    "gsap": "^3.12.5",
+    "three": "^0.171.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  }
+}
