@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import gsap from 'gsap';
 import type { SkateboardTick, SkateboardOptions } from '../core/types.js';
+import { PhysicsRig } from './PhysicsRig.js';
 
 // ---------------------------------------------------------------------------
 // Asset imports — resolved by Vite (or compatible bundler) at build time.
@@ -37,9 +38,6 @@ export interface Disposable {
 
 /** Wheel center height from ground — from GLTF node position.y */
 const WHEEL_RADIUS = 0.086;
-
-/** Real skateboard wheel radius in metres (52mm wheel) */
-const REAL_WHEEL_RADIUS = 0.026;
 
 /** Jump timing from InteractiveSkateboard.tsx */
 const JUMP_RISE_DURATION = 0.51;
@@ -103,6 +101,8 @@ export class Skateboard implements Loadable, Tickable, Disposable {
 
   private wheels: THREE.Object3D[] = [];
 
+  private readonly physicsRig = new PhysicsRig();
+
   private isJumping    = false;
   private prevAirborne = false;
   private lastTime: number | null = null;
@@ -157,8 +157,9 @@ export class Skateboard implements Loadable, Tickable, Disposable {
     const dt = this.lastTime !== null ? (now - this.lastTime) / 1000 : 0.016;
     this.lastTime = now;
 
+    const rig = this.physicsRig.simulate(data, dt);
     this.applyOrientation(data, dt);
-    this.spinWheels(data.speed, dt);
+    this.spinWheels(rig.wheelAngularVelocity, dt);
     this.updateJump(data);
   }
 
@@ -201,8 +202,8 @@ export class Skateboard implements Loadable, Tickable, Disposable {
   // Private — wheels
   // ---------------------------------------------------------------------------
 
-  private spinWheels(speed: number, dt: number): void {
-    const delta = (speed / REAL_WHEEL_RADIUS) * dt;
+  private spinWheels(angularVelocity: number, dt: number): void {
+    const delta = angularVelocity * dt;
     for (const wheel of this.wheels) wheel.rotation.x += delta;
   }
 

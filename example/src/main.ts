@@ -103,6 +103,12 @@ const hudYaw   = document.getElementById('v-yaw')!;
 const hudSpeed = document.getElementById('v-speed')!;
 const hudAir   = document.getElementById('v-air')!;
 
+const ctrlSpeed    = document.getElementById('ctrl-speed') as HTMLInputElement;
+const ctrlSpeedVal = document.getElementById('ctrl-speed-val')!;
+ctrlSpeed.addEventListener('input', () => {
+  ctrlSpeedVal.textContent = `${parseFloat(ctrlSpeed.value).toFixed(1)} m/s`;
+});
+
 // ---------------------------------------------------------------------------
 // Resize
 // ---------------------------------------------------------------------------
@@ -124,6 +130,9 @@ function loop(): void {
   const raw  = sensor.next();
   const tick = session.process(raw);
 
+  // Manual speed override from slider
+  tick.speed = parseFloat(ctrlSpeed.value);
+
   // Drive the skateboard model
   board.tick(tick);
 
@@ -131,7 +140,7 @@ function loop(): void {
   hudRoll.textContent  = tick.roll.toFixed(3);
   hudPitch.textContent = tick.pitch.toFixed(3);
   hudYaw.textContent   = tick.yaw.toFixed(3);
-  hudSpeed.textContent = ((raw as typeof raw & { speed: number }).speed ?? 0).toFixed(2);
+  hudSpeed.textContent = tick.speed.toFixed(2);
   hudAir.textContent   = tick.airborne ? 'TRUE ↑' : 'false';
   hudAir.style.color   = tick.airborne ? '#ff7a51' : '#fff';
 

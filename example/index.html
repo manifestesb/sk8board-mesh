@@ -21,6 +21,23 @@
     }
 
     #hud span { color: #fff; }
+
+    #controls {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      color: #b8fc39;
+      font-size: 12px;
+      font-family: monospace;
+      text-shadow: 0 0 8px #b8fc39;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    #controls label { display: flex; align-items: center; gap: 8px; }
+    #controls input[type="range"] { accent-color: #b8fc39; width: 120px; }
+    #controls span { color: #fff; min-width: 52px; }
   </style>
 </head>
 <body>
@@ -30,6 +47,13 @@
     yaw:     <span id="v-yaw">0.000</span> rad<br>
     speed:   <span id="v-speed">0.000</span> m/s<br>
     airborne:<span id="v-air">false</span>
+  </div>
+  <div id="controls">
+    <label>
+      speed
+      <input id="ctrl-speed" type="range" min="0" max="10" step="0.1" value="0" />
+      <span id="ctrl-speed-val">0.0 m/s</span>
+    </label>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

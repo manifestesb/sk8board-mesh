@@ -1,6 +1,9 @@
 export { Skateboard } from './adapters/Skateboard.js';
 export type { Loadable, Tickable, Disposable } from './adapters/Skateboard.js';
 
+export { PhysicsRig } from './adapters/PhysicsRig.js';
+export type { Simulatable, RigState } from './adapters/PhysicsRig.js';
+
 export { Sk8Packet, Sk8Session } from './core/Sk8Packet.js';
 
 export { ComplementaryFilter } from './core/filters/ComplementaryFilter.js';
