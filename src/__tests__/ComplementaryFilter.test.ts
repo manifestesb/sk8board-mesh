@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ComplementaryFilter } from '../filters/ComplementaryFilter.js';
+import { ComplementaryFilter } from '../core/filters/ComplementaryFilter.js';
 
 const G = 9.81; // gravity m/s²
 
@@ -20,17 +20,17 @@ describe('ComplementaryFilter', () => {
 
   describe('at rest (flat board, no motion)', () => {
     it('returns zero roll when board is level', () => {
-      const r = filter.update(REST, ZERO_GYRO, 0.01);
+      const r = filter.fuse(REST, ZERO_GYRO, 0.01);
       expect(r.roll).toBeCloseTo(0, 4);
     });
 
     it('returns zero pitch when board is level', () => {
-      const r = filter.update(REST, ZERO_GYRO, 0.01);
+      const r = filter.fuse(REST, ZERO_GYRO, 0.01);
       expect(r.pitch).toBeCloseTo(0, 4);
     });
 
     it('returns zero yaw at start', () => {
-      const r = filter.update(REST, ZERO_GYRO, 0.01);
+      const r = filter.fuse(REST, ZERO_GYRO, 0.01);
       expect(r.yaw).toBeCloseTo(0, 4);
     });
   });
@@ -46,7 +46,7 @@ describe('ComplementaryFilter', () => {
 
     it('detects lateral roll from accel.x', () => {
       const angle = Math.PI / 6; // 30°
-      const r = filter.update(
+      const r = filter.fuse(
         { x: Math.sin(angle) * G, y: Math.cos(angle) * G, z: 0 },
         ZERO_GYRO,
         0.01,
@@ -56,7 +56,7 @@ describe('ComplementaryFilter', () => {
 
     it('detects pitch from accel.z', () => {
       const angle = Math.PI / 8; // 22.5°
-      const r = filter.update(
+      const r = filter.fuse(
         { x: 0, y: Math.cos(angle) * G, z: Math.sin(angle) * G },
         ZERO_GYRO,
         0.01,
@@ -66,7 +66,7 @@ describe('ComplementaryFilter', () => {
 
     it('negative roll for tilt in opposite direction', () => {
       const angle = Math.PI / 6;
-      const r = filter.update(
+      const r = filter.fuse(
         { x: -Math.sin(angle) * G, y: Math.cos(angle) * G, z: 0 },
         ZERO_GYRO,
         0.01,
@@ -86,23 +86,23 @@ describe('ComplementaryFilter', () => {
 
     it('integrates roll from gyro.x over dt', () => {
       // 2 rad/s roll for 0.5s = 1 rad
-      const r = filter.update(REST, { x: 2, y: 0, z: 0 }, 0.5);
+      const r = filter.fuse(REST, { x: 2, y: 0, z: 0 }, 0.5);
       expect(r.roll).toBeCloseTo(1.0, 4);
     });
 
     it('integrates pitch from gyro.z over dt', () => {
-      const r = filter.update(REST, { x: 0, y: 0, z: 3 }, 1.0);
+      const r = filter.fuse(REST, { x: 0, y: 0, z: 3 }, 1.0);
       expect(r.pitch).toBeCloseTo(3.0, 4);
     });
 
     it('integrates yaw from gyro.y over dt', () => {
-      const r = filter.update(REST, { x: 0, y: 1, z: 0 }, 1.0);
+      const r = filter.fuse(REST, { x: 0, y: 1, z: 0 }, 1.0);
       expect(r.yaw).toBeCloseTo(1.0, 4);
     });
 
     it('accumulates yaw across multiple frames', () => {
-      filter.update(REST, { x: 0, y: 1, z: 0 }, 1.0); // +1 rad
-      const r = filter.update(REST, { x: 0, y: 1, z: 0 }, 1.0); // +1 rad
+      filter.fuse(REST, { x: 0, y: 1, z: 0 }, 1.0); // +1 rad
+      const r = filter.fuse(REST, { x: 0, y: 1, z: 0 }, 1.0); // +1 rad
       expect(r.yaw).toBeCloseTo(2.0, 4);
     });
   });
@@ -115,7 +115,7 @@ describe('ComplementaryFilter', () => {
     it('result is between gyro-only and accel-only estimates', () => {
       const angle = Math.PI / 4;
       // Gyro says 0 (no rotation), accel says angle
-      const r = filter.update(
+      const r = filter.fuse(
         { x: Math.sin(angle) * G, y: Math.cos(angle) * G, z: 0 },
         ZERO_GYRO,
         0.01,
@@ -133,7 +133,7 @@ describe('ComplementaryFilter', () => {
 
       let result = { roll: 0, pitch: 0, yaw: 0 };
       for (let i = 0; i < 500; i++) {
-        result = filter.update(accel, ZERO_GYRO, 0.01);
+        result = filter.fuse(accel, ZERO_GYRO, 0.01);
       }
       // After many frames with zero gyro, should converge close to accel angle
       expect(result.roll).toBeCloseTo(targetAngle, 1);
@@ -147,30 +147,30 @@ describe('ComplementaryFilter', () => {
   describe('reset()', () => {
     it('clears accumulated roll', () => {
       filter = new ComplementaryFilter(1);
-      filter.update(REST, { x: 5, y: 0, z: 0 }, 1.0); // accumulate roll
+      filter.fuse(REST, { x: 5, y: 0, z: 0 }, 1.0); // accumulate roll
       filter.reset();
-      const r = filter.update(REST, ZERO_GYRO, 0.01);
+      const r = filter.fuse(REST, ZERO_GYRO, 0.01);
       expect(r.roll).toBeCloseTo(0, 4);
     });
 
     it('clears accumulated yaw', () => {
       filter = new ComplementaryFilter(1);
-      filter.update(REST, { x: 0, y: 2, z: 0 }, 1.0);
+      filter.fuse(REST, { x: 0, y: 2, z: 0 }, 1.0);
       filter.reset();
-      const r = filter.update(REST, ZERO_GYRO, 0.01);
+      const r = filter.fuse(REST, ZERO_GYRO, 0.01);
       expect(r.yaw).toBeCloseTo(0, 4);
     });
   });
 
   // ---------------------------------------------------------------------------
-  // setAlpha()
+  // tune()
   // ---------------------------------------------------------------------------
 
-  describe('setAlpha()', () => {
+  describe('tune()', () => {
     it('clamps alpha to [0, 1]', () => {
-      filter.setAlpha(2.0);
+      filter.tune(2.0);
       // With alpha=1 (clamped), gyro dominates — zero gyro means no change
-      const r = filter.update(
+      const r = filter.fuse(
         { x: Math.sin(Math.PI / 4) * G, y: Math.cos(Math.PI / 4) * G, z: 0 },
         ZERO_GYRO,
         0.01,
@@ -179,9 +179,9 @@ describe('ComplementaryFilter', () => {
     });
 
     it('alpha=0 makes filter fully trust accelerometer', () => {
-      filter.setAlpha(0);
+      filter.tune(0);
       const angle = Math.PI / 5;
-      const r = filter.update(
+      const r = filter.fuse(
         { x: Math.sin(angle) * G, y: Math.cos(angle) * G, z: 0 },
         ZERO_GYRO,
         0.01,

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
-import { Skateboard, Sk8Processor, warehouseHdrUrl } from '@manifeste/sk8board';
+import { Skateboard, Sk8Session, warehouseHdrUrl } from '@manifeste/sk8board';
 import { MockSensor } from './MockSensor.js';
 
 // ---------------------------------------------------------------------------
@@ -83,7 +83,7 @@ new RGBELoader().load(warehouseHdrUrl, (texture) => {
 // ---------------------------------------------------------------------------
 
 const board = new Skateboard({ truckColor: '#aaaaaa', boltColor: '#cccccc' });
-const processor = new Sk8Processor({ gyroUnit: 'rad/s' });
+const session = new Sk8Session({ gyroUnit: 'rad/s' });
 const sensor = new MockSensor();
 
 board.load().then(() => {
@@ -122,7 +122,7 @@ function loop(): void {
 
   // Get next synthetic sensor frame
   const raw  = sensor.next();
-  const tick = processor.process(raw);
+  const tick = session.process(raw);
 
   // Drive the skateboard model
   board.tick(tick);

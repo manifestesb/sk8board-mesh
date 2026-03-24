@@ -49,7 +49,7 @@ vi.spyOn(THREE.TextureLoader.prototype, 'load').mockReturnValue(new THREE.Textur
 // ---------------------------------------------------------------------------
 // Import after mocks are set up
 // ---------------------------------------------------------------------------
-import { Skateboard } from '../Skateboard.js';
+import { Skateboard } from '../adapters/Skateboard.js';
 
 // ---------------------------------------------------------------------------
 // Helpers

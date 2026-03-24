@@ -16,9 +16,9 @@ const DEG_TO_RAD = Math.PI / 180;
  *   const packet = new Sk8Packet(filter, detector, rawData, config);
  *   skateboard.tick(packet.toTick());
  *
- * Or via the static factory (manages filter/detector internally):
- *   const processor = Sk8Packet.createProcessor(config);
- *   skateboard.tick(processor.process(rawData));
+ * Or via Sk8Session for continuous streams:
+ *   const session = Sk8Session.start(config);
+ *   skateboard.tick(session.process(rawData));
  */
 export class Sk8Packet {
   constructor(
@@ -37,10 +37,10 @@ export class Sk8Packet {
       : gyro;
 
     // Fuse accel + gyro into orientation
-    const orientation = this.filter.update(accel, gyroRad, dt);
+    const orientation = this.filter.fuse(accel, gyroRad, dt);
 
     // Detect jump
-    const jump = this.detector.update(accel, dt);
+    const jump = this.detector.detect(accel, dt);
 
     // Clamp tilt angles for visual sanity
     const clamp = (v: number) =>
@@ -62,22 +62,22 @@ export class Sk8Packet {
 }
 
 // ---------------------------------------------------------------------------
-// Processor — stateful wrapper for continuous sensor streams
+// Sk8Session — stateful wrapper for continuous sensor streams
 // ---------------------------------------------------------------------------
 
 /**
- * Stateful processor that keeps the filter and detector alive across packets.
+ * Stateful session that keeps the filter and detector alive across packets.
  * This is the recommended entry point for continuous sensor streams.
  *
  * Usage:
- *   const proc = Sk8Packet.createProcessor({ gyroUnit: 'deg/s' });
+ *   const session = Sk8Session.start({ gyroUnit: 'deg/s' });
  *
  *   function listener(pkt: SensorEvent) {
- *     skateboard.tick(proc.process(pkt.toRaw()));
+ *     skateboard.tick(session.process(pkt.toRaw()));
  *     renderer.render(scene, camera);
  *   }
  */
-export class Sk8Processor {
+export class Sk8Session {
   private readonly filter: ComplementaryFilter;
   private readonly detector: JumpDetector;
   private readonly config: Required<SensorConfig>;
@@ -89,6 +89,11 @@ export class Sk8Processor {
       this.config.freeFallThreshold,
       this.config.freeFallFrames,
     );
+  }
+
+  /** Factory — creates a new session with optional sensor config. */
+  static start(config?: SensorConfig): Sk8Session {
+    return new Sk8Session(config);
   }
 
   process(raw: RawSensorData): SkateboardTick {
@@ -104,10 +109,10 @@ export class Sk8Processor {
 
 function resolveConfig(config: SensorConfig): Required<SensorConfig> {
   return {
-    gyroUnit:         config.gyroUnit         ?? 'rad/s',
-    maxTiltAngle:     config.maxTiltAngle      ?? Math.PI / 5,
-    freeFallThreshold: config.freeFallThreshold ?? 3.0,
-    freeFallFrames:   config.freeFallFrames    ?? 2,
-    filterAlpha:      config.filterAlpha       ?? 0.96,
+    gyroUnit:          config.gyroUnit          ?? 'rad/s',
+    maxTiltAngle:      config.maxTiltAngle       ?? Math.PI / 5,
+    freeFallThreshold: config.freeFallThreshold  ?? 3.0,
+    freeFallFrames:    config.freeFallFrames     ?? 2,
+    filterAlpha:       config.filterAlpha        ?? 0.96,
   };
 }

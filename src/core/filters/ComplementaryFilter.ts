@@ -1,5 +1,10 @@
 import type { Vector3 } from '../types.js';
 
+export interface Fusable {
+  fuse(accel: Vector3, gyro: Vector3, dt: number): { roll: number; pitch: number; yaw: number };
+  reset(): void;
+}
+
 /**
  * Complementary filter — fuses accelerometer and gyroscope to estimate
  * board orientation without drift.
@@ -23,7 +28,7 @@ import type { Vector3 } from '../types.js';
  *   gyro.y  → yaw rate (integrated, no absolute reference)
  *   gyro.z  → pitch rate
  */
-export class ComplementaryFilter {
+export class ComplementaryFilter implements Fusable {
   private roll = 0;   // radians
   private pitch = 0;  // radians
   private yaw = 0;    // radians (gyro-only, drifts over time)
@@ -31,13 +36,13 @@ export class ComplementaryFilter {
   constructor(private alpha = 0.96) {}
 
   /**
-   * Process one sensor sample.
+   * Fuse one sensor sample into a running orientation estimate.
    * @param accel  Accelerometer readings in m/s²
    * @param gyro   Gyroscope readings in rad/s
    * @param dt     Time delta in seconds since last sample
    * @returns Estimated { roll, pitch, yaw } in radians
    */
-  update(accel: Vector3, gyro: Vector3, dt: number): { roll: number; pitch: number; yaw: number } {
+  fuse(accel: Vector3, gyro: Vector3, dt: number): { roll: number; pitch: number; yaw: number } {
     // --- Accel-derived angles (absolute reference, noisy during motion) ---
     // Roll: board tilting left/right around Z (long) axis
     const accelRoll = Math.atan2(accel.x, accel.y);
@@ -65,8 +70,8 @@ export class ComplementaryFilter {
     this.yaw = 0;
   }
 
-  /** Manually set alpha without creating a new instance */
-  setAlpha(alpha: number): void {
+  /** Adjust the gyro/accel blend ratio without creating a new instance */
+  tune(alpha: number): void {
     this.alpha = Math.max(0, Math.min(1, alpha));
   }
 }

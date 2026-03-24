@@ -9,6 +9,11 @@ export interface JumpResult {
   estimatedHeight: number;
 }
 
+export interface Detectable {
+  detect(accel: Vector3, dt: number): JumpResult;
+  reset(): void;
+}
+
 /**
  * Jump detector based on free-fall detection.
  *
@@ -23,7 +28,7 @@ export interface JumpResult {
  * (the "pop" spike in accel.y) to approximate peak height via kinematics:
  *   h = v₀² / (2g)   where v₀ = (accelPeak - g) * dt_pop
  */
-export class JumpDetector {
+export class JumpDetector implements Detectable {
   private airborne = false;
   private consecutiveFreeFallFrames = 0;
   private peakAccelY = 0;       // max accel.y seen before this jump (pop spike)
@@ -40,7 +45,7 @@ export class JumpDetector {
    * @param accel  Accelerometer in m/s²
    * @param dt     Time delta in seconds
    */
-  update(accel: Vector3, dt: number): JumpResult {
+  detect(accel: Vector3, dt: number): JumpResult {
     const magnitude = Math.sqrt(accel.x ** 2 + accel.y ** 2 + accel.z ** 2);
     const wasAirborne = this.airborne;
 

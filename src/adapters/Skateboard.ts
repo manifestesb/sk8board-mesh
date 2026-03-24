@@ -2,18 +2,34 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import gsap from 'gsap';
-import type { SkateboardTick, SkateboardOptions } from './types.js';
+import type { SkateboardTick, SkateboardOptions } from '../core/types.js';
 
 // ---------------------------------------------------------------------------
 // Asset imports — resolved by Vite (or compatible bundler) at build time.
 // The assets live alongside the library source; no public/ paths needed.
 // ---------------------------------------------------------------------------
-import gltfUrl         from './assets/skateboard.gltf?url';
-import gripDiffuseUrl  from './assets/skateboard/griptape-diffuse.webp?url';
-import gripRoughUrl    from './assets/skateboard/griptape-roughness.webp?url';
-import metalNormalUrl  from './assets/skateboard/metal-normal.avif?url';
-import deckUrl         from './assets/skateboard/Deck.webp?url';
-import wheelUrl        from './assets/skateboard/SkateWheel1.png?url';
+import gltfUrl         from '../assets/skateboard.gltf?url';
+import gripDiffuseUrl  from '../assets/skateboard/griptape-diffuse.webp?url';
+import gripRoughUrl    from '../assets/skateboard/griptape-roughness.webp?url';
+import metalNormalUrl  from '../assets/skateboard/metal-normal.avif?url';
+import deckUrl         from '../assets/skateboard/Deck.webp?url';
+import wheelUrl        from '../assets/skateboard/SkateWheel1.png?url';
+
+// ---------------------------------------------------------------------------
+// Capability interfaces
+// ---------------------------------------------------------------------------
+
+export interface Loadable {
+  load(): Promise<void>;
+}
+
+export interface Tickable {
+  tick(data: SkateboardTick): void;
+}
+
+export interface Disposable {
+  dispose(): void;
+}
 
 // ---------------------------------------------------------------------------
 // Constants derived from the GLTF model geometry
@@ -59,7 +75,7 @@ interface ResolvedOptions {
 // ---------------------------------------------------------------------------
 
 /**
- * Telemetry-driven 3D skateboard.
+ * Telemetry-driven 3D skateboard — Three.js adapter.
  *
  * All model assets (GLTF, textures) are bundled with the library.
  * Only the Draco WASM decoder path needs to be served by the host app.
@@ -70,11 +86,11 @@ interface ResolvedOptions {
  *   scene.add(board.root);
  *
  *   function listener(pkt) {
- *     board.tick(processor.process(pkt.toRaw()));
+ *     board.tick(session.process(pkt.toRaw()));
  *     renderer.render(scene, camera);
  *   }
  */
-export class Skateboard {
+export class Skateboard implements Loadable, Tickable, Disposable {
   /**
    * Root Three.js group — add this to your scene.
    * Hierarchy: root (yaw) → jumpGroup (Y) → tiltGroup (roll/pitch) → model
