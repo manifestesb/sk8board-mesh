@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
-import { Skateboard, Sk8Session, warehouseHdrUrl } from '@manifeste/sk8board';
-import { MockSensor } from './MockSensor.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { Skateboard, warehouseHdrUrl } from '@manifeste/sk8board';
 
 // ---------------------------------------------------------------------------
 // Renderer
@@ -83,8 +83,6 @@ new RGBELoader().load(warehouseHdrUrl, (texture) => {
 // ---------------------------------------------------------------------------
 
 const board = new Skateboard({ truckColor: '#aaaaaa', boltColor: '#cccccc' });
-const session = new Sk8Session({ gyroUnit: 'rad/s' });
-const sensor = new MockSensor();
 
 board.load().then(() => {
   scene.add(board.root);
@@ -109,6 +107,22 @@ ctrlSpeed.addEventListener('input', () => {
   ctrlSpeedVal.textContent = `${parseFloat(ctrlSpeed.value).toFixed(1)} m/s`;
 });
 
+const ctrlRoll    = document.getElementById('ctrl-roll') as HTMLInputElement;
+const ctrlRollVal = document.getElementById('ctrl-roll-val')!;
+ctrlRoll.addEventListener('input', () => {
+  ctrlRollVal.textContent = `${parseFloat(ctrlRoll.value).toFixed(2)} rad`;
+});
+
+// ---------------------------------------------------------------------------
+// Camera controls
+// ---------------------------------------------------------------------------
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(-0.2, 0.15, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+
 // ---------------------------------------------------------------------------
 // Resize
 // ---------------------------------------------------------------------------
@@ -126,12 +140,13 @@ window.addEventListener('resize', () => {
 function loop(): void {
   requestAnimationFrame(loop);
 
-  // Get next synthetic sensor frame
-  const raw  = sensor.next();
-  const tick = session.process(raw);
-
-  // Manual speed override from slider
-  tick.speed = parseFloat(ctrlSpeed.value);
+  const tick = {
+    roll:     parseFloat(ctrlRoll.value),
+    pitch:    0,
+    yaw:      0,
+    speed:    parseFloat(ctrlSpeed.value),
+    airborne: false,
+  };
 
   // Drive the skateboard model
   board.tick(tick);
@@ -144,6 +159,7 @@ function loop(): void {
   hudAir.textContent   = tick.airborne ? 'TRUE ↑' : 'false';
   hudAir.style.color   = tick.airborne ? '#ff7a51' : '#fff';
 
+  controls.update();
   renderer.render(scene, camera);
 }
 

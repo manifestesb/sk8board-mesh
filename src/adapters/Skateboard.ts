@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import gsap from 'gsap';
 import type { SkateboardTick, SkateboardOptions } from '../core/types.js';
-import { PhysicsRig } from './PhysicsRig.js';
+import { PhysicsRig, type RigState } from './PhysicsRig.js';
 
 // ---------------------------------------------------------------------------
 // Asset imports — resolved by Vite (or compatible bundler) at build time.
@@ -99,7 +99,9 @@ export class Skateboard implements Loadable, Tickable, Disposable {
   private readonly tiltGroup:  THREE.Group;
   private readonly modelGroup: THREE.Group;
 
-  private wheels: THREE.Object3D[] = [];
+  private wheels:      THREE.Object3D[]  = [];
+  private truckGroup1: THREE.Group | null = null;
+  private truckGroup2: THREE.Group | null = null;
 
   private readonly physicsRig = new PhysicsRig();
 
@@ -160,6 +162,7 @@ export class Skateboard implements Loadable, Tickable, Disposable {
     const rig = this.physicsRig.simulate(data, dt);
     this.applyOrientation(data, dt);
     this.spinWheels(rig.wheelAngularVelocity, dt);
+    this.applyCarve(rig);
     this.updateJump(data);
   }
 
@@ -205,6 +208,18 @@ export class Skateboard implements Loadable, Tickable, Disposable {
   private spinWheels(angularVelocity: number, dt: number): void {
     const delta = angularVelocity * dt;
     for (const wheel of this.wheels) wheel.rotation.x += delta;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private — carve
+  // ---------------------------------------------------------------------------
+
+  private applyCarve(rig: RigState): void {
+    // Negative sign: positive truckCompression (lean right) tilts right axle-end down
+    if (this.truckGroup1) this.truckGroup1.rotation.z = -rig.truckCompression;
+    if (this.truckGroup2) this.truckGroup2.rotation.z = -rig.truckCompression;
+
+    this.modelGroup.rotation.y = rig.carveAngle;
   }
 
   // ---------------------------------------------------------------------------
@@ -330,36 +345,48 @@ export class Skateboard implements Loadable, Tickable, Disposable {
   }
 
   private mountMeshes(nodes: GLTFNodes, mats: ReturnType<Skateboard['buildMaterials']>): void {
-    const defs: Array<{
-      node: THREE.Object3D;
-      material: THREE.Material;
-      position: [number, number, number];
-      rotation?: [number, number, number];
-      isWheel?: boolean;
-    }> = [
-      { node: nodes.GripTape,   material: mats.gripTape, position: [0,      0.286,  -0.002] },
-      { node: nodes.Deck,       material: mats.deck,     position: [0,      0.271,  -0.002] },
-      { node: nodes.Bolts,      material: mats.bolt,     position: [0,      0.198,   0],    rotation: [Math.PI, 0, Math.PI] },
-      { node: nodes.Baseplates, material: mats.truck,    position: [0,      0.211,   0] },
-      { node: nodes.Truck1,     material: mats.truck,    position: [0,      0.101,  -0.617] },
-      { node: nodes.Truck2,     material: mats.truck,    position: [0,      0.101,   0.617], rotation: [Math.PI, 0, Math.PI] },
-      { node: nodes.Wheel1,     material: mats.wheel,    position: [ 0.238, 0.086,   0.635], isWheel: true },
-      { node: nodes.Wheel2,     material: mats.wheel,    position: [-0.237, 0.086,   0.635], isWheel: true },
-      { node: nodes.Wheel3,     material: mats.wheel,    position: [ 0.237, 0.086,  -0.635], rotation: [Math.PI, 0, Math.PI], isWheel: true },
-      { node: nodes.Wheel4,     material: mats.wheel,    position: [-0.238, 0.086,  -0.635], rotation: [Math.PI, 0, Math.PI], isWheel: true },
-    ];
+    const mesh = (
+      node: THREE.Object3D,
+      material: THREE.Material,
+      position: [number, number, number],
+      rotation?: [number, number, number],
+    ): THREE.Mesh => {
+      const m = new THREE.Mesh((node as THREE.Mesh).geometry, material);
+      m.castShadow = m.receiveShadow = true;
+      m.position.set(...position);
+      if (rotation) m.rotation.set(...rotation);
+      return m;
+    };
 
-    for (const def of defs) {
-      // Create a new Mesh from the node's geometry — same approach as the
-      // original Skateboard.tsx which uses nodes.GripTape.geometry directly.
-      // Avoids instanceof ambiguity on cloned GLTF objects.
-      const geometry = (def.node as THREE.Mesh).geometry;
-      const mesh = new THREE.Mesh(geometry, def.material);
-      mesh.castShadow = mesh.receiveShadow = true;
-      mesh.position.set(...def.position);
-      if (def.rotation) mesh.rotation.set(...def.rotation);
-      this.modelGroup.add(mesh);
-      if (def.isWheel) this.wheels.push(mesh);
-    }
+    // Base components — fixed, not part of any truck group
+    this.modelGroup.add(
+      mesh(nodes.GripTape,   mats.gripTape, [0, 0.286, -0.002]),
+      mesh(nodes.Deck,       mats.deck,     [0, 0.271, -0.002]),
+      mesh(nodes.Bolts,      mats.bolt,     [0, 0.198,  0],    [Math.PI, 0, Math.PI]),
+      mesh(nodes.Baseplates, mats.truck,    [0, 0.211,  0]),
+    );
+
+    // Rear truck group (Truck1 + Wheel3 + Wheel4).
+    // Wheel positions are group-relative: world = group.position + local.
+    const rearGroup = new THREE.Group();
+    rearGroup.position.set(0, 0.101, -0.617);
+    const w3 = mesh(nodes.Wheel3, mats.wheel, [ 0.237, -0.015, -0.018], [Math.PI, 0, Math.PI]);
+    const w4 = mesh(nodes.Wheel4, mats.wheel, [-0.238, -0.015, -0.018], [Math.PI, 0, Math.PI]);
+    rearGroup.add(mesh(nodes.Truck1, mats.truck, [0, 0, 0]), w3, w4);
+    this.modelGroup.add(rearGroup);
+    this.truckGroup1 = rearGroup;
+    this.wheels.push(w3, w4);
+
+    // Front truck group (Truck2 + Wheel1 + Wheel2).
+    // Truck2 mesh carries the [π,0,π] flip; the group itself has no rotation
+    // so truckCompression rotation.z works cleanly on both groups.
+    const frontGroup = new THREE.Group();
+    frontGroup.position.set(0, 0.101, 0.617);
+    const w1 = mesh(nodes.Wheel1, mats.wheel, [ 0.238, -0.015, 0.018]);
+    const w2 = mesh(nodes.Wheel2, mats.wheel, [-0.237, -0.015, 0.018]);
+    frontGroup.add(mesh(nodes.Truck2, mats.truck, [0, 0, 0], [Math.PI, 0, Math.PI]), w1, w2);
+    this.modelGroup.add(frontGroup);
+    this.truckGroup2 = frontGroup;
+    this.wheels.push(w1, w2);
   }
 }

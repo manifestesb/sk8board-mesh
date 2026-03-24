@@ -124,7 +124,7 @@ describe('Skateboard', () => {
     it('adds meshes to the scene hierarchy after load', async () => {
       await board.load();
       const modelGroup = board.root.children[0].children[0].children[0];
-      expect(modelGroup.children.length).toBe(10); // all 10 GLTF nodes
+      expect(modelGroup.children.length).toBe(6); // 4 base meshes + 2 truck groups
     });
   });
 

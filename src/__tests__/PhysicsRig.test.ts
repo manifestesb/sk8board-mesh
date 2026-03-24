@@ -11,8 +11,9 @@ function makeTick(overrides: Partial<SkateboardTick> = {}): SkateboardTick {
   return { roll: 0, pitch: 0, yaw: 0, speed: 0, airborne: false, ...overrides };
 }
 
-const REAL_WHEEL_RADIUS = 0.026;
-const IDLE_SPEED        = 0.3;
+const REAL_WHEEL_RADIUS     = 0.026;
+const IDLE_SPEED            = 0.3;
+const MAX_TRUCK_COMPRESSION = 0.20;
 
 describe('PhysicsRig', () => {
   let rig: PhysicsRig;
@@ -67,5 +68,46 @@ describe('PhysicsRig', () => {
     it('reset() does not throw', () => {
       expect(() => rig.reset()).not.toThrow();
     });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Stage 2 — Carving
+  // ---------------------------------------------------------------------------
+
+  describe('Stage 2 — carving', () => {
+    it('zero carve outputs when roll is zero', () => {
+      const { truckCompression, carveAngle } = rig.simulate(makeTick({ roll: 0 }), 0.016);
+      expect(truckCompression).toBe(0);
+      expect(carveAngle).toBe(0);
+    });
+
+    it('positive roll → positive truckCompression and carveAngle', () => {
+      const { truckCompression, carveAngle } = rig.simulate(makeTick({ roll: 0.3 }), 0.016);
+      expect(truckCompression).toBeGreaterThan(0);
+      expect(carveAngle).toBeGreaterThan(0);
+    });
+
+    it('negative roll → negative truckCompression and carveAngle', () => {
+      const { truckCompression, carveAngle } = rig.simulate(makeTick({ roll: -0.3 }), 0.016);
+      expect(truckCompression).toBeLessThan(0);
+      expect(carveAngle).toBeLessThan(0);
+    });
+
+    it('truckCompression clamps at MAX_TRUCK_COMPRESSION for extreme positive roll', () => {
+      const { truckCompression } = rig.simulate(makeTick({ roll: 10 }), 0.016);
+      expect(truckCompression).toBeCloseTo(MAX_TRUCK_COMPRESSION, 5);
+    });
+
+    it('truckCompression clamps at -MAX_TRUCK_COMPRESSION for extreme negative roll', () => {
+      const { truckCompression } = rig.simulate(makeTick({ roll: -10 }), 0.016);
+      expect(truckCompression).toBeCloseTo(-MAX_TRUCK_COMPRESSION, 5);
+    });
+
+    it('carveAngle is proportional to roll within normal range', () => {
+      const a = rig.simulate(makeTick({ roll: 0.2 }), 0.016).carveAngle;
+      const b = rig.simulate(makeTick({ roll: 0.4 }), 0.016).carveAngle;
+      expect(b).toBeCloseTo(a * 2, 5);
+    });
+
   });
 });
