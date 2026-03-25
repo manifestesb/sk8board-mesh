@@ -86,14 +86,14 @@ describe('Skateboard', () => {
       expect(board.root.children).toHaveLength(1);
     });
 
-    it('jumpGroup has exactly one child (tiltGroup)', () => {
+    it('jumpGroup has exactly one child (modelGroup)', () => {
       const jumpGroup = board.root.children[0];
       expect(jumpGroup.children).toHaveLength(1);
     });
 
-    it('tiltGroup has exactly one child (modelGroup)', () => {
-      const tiltGroup = board.root.children[0].children[0];
-      expect(tiltGroup.children).toHaveLength(1);
+    it('modelGroup starts with one child (deckLean.group) before load', () => {
+      const modelGroup = board.root.children[0].children[0];
+      expect(modelGroup.children).toHaveLength(1);
     });
 
     it('root starts at origin', () => {
@@ -123,8 +123,9 @@ describe('Skateboard', () => {
 
     it('adds meshes to the scene hierarchy after load', async () => {
       await board.load();
-      const modelGroup = board.root.children[0].children[0].children[0];
-      expect(modelGroup.children.length).toBe(6); // 4 base meshes + 2 truck groups
+      const modelGroup = board.root.children[0].children[0];
+      // deckLean.group + rearGroup + frontGroup
+      expect(modelGroup.children.length).toBe(3);
     });
   });
 
@@ -144,39 +145,39 @@ describe('Skateboard', () => {
       expect(board.root.rotation.y).toBeGreaterThan(0);
     });
 
-    it('lerps tiltGroup rotation.z toward roll', () => {
-      const tiltGroup = board.root.children[0].children[0] as THREE.Group;
+    it('lerps deckGroup rotation.z toward roll', () => {
+      const deckGroup = board.root.children[0].children[0].children[0] as THREE.Group;
       board.tick(makeTick({ roll: 0.5 }), 0);
       board.tick(makeTick({ roll: 0.5 }), 100);
-      expect(tiltGroup.rotation.z).toBeGreaterThan(0);
+      expect(deckGroup.rotation.z).toBeGreaterThan(0);
     });
 
-    it('lerps tiltGroup rotation.x toward pitch', () => {
-      const tiltGroup = board.root.children[0].children[0] as THREE.Group;
+    it('lerps deckGroup rotation.x toward pitch', () => {
+      const deckGroup = board.root.children[0].children[0].children[0] as THREE.Group;
       board.tick(makeTick({ pitch: 0.3 }), 0);
       board.tick(makeTick({ pitch: 0.3 }), 100);
-      expect(tiltGroup.rotation.x).toBeGreaterThan(0);
+      expect(deckGroup.rotation.x).toBeGreaterThan(0);
     });
 
     it('converges to target orientation over many ticks', () => {
-      const target = 0.4;
-      const tiltGroup = board.root.children[0].children[0] as THREE.Group;
+      const target = 0.20; // within MAX_LEAN_ANGLE (0.23)
+      const deckGroup = board.root.children[0].children[0].children[0] as THREE.Group;
       let t = 0;
       for (let i = 0; i < 200; i++) {
         t += 16; // ~60fps
         board.tick(makeTick({ roll: target }), t);
       }
-      expect(tiltGroup.rotation.z).toBeCloseTo(target, 1);
+      expect(deckGroup.rotation.z).toBeCloseTo(target, 1);
     });
 
     it('returns to zero when target is zero', () => {
-      const tiltGroup = board.root.children[0].children[0] as THREE.Group;
+      const deckGroup = board.root.children[0].children[0].children[0] as THREE.Group;
       // First push to non-zero
       let t = 0;
       for (let i = 0; i < 50; i++) { t += 16; board.tick(makeTick({ roll: 0.5 }), t); }
       // Then drive back to zero
       for (let i = 0; i < 200; i++) { t += 16; board.tick(makeTick({ roll: 0 }), t); }
-      expect(tiltGroup.rotation.z).toBeCloseTo(0, 1);
+      expect(deckGroup.rotation.z).toBeCloseTo(0, 1);
     });
   });
 
@@ -215,6 +216,56 @@ describe('Skateboard', () => {
       board.tick(makeTick({ airborne: true, jumpHeight: 0.5 }), 48);
       // Should not throw and state should be coherent
       expect(() => board.tick(makeTick({ airborne: false }), 64)).not.toThrow();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // tick() — truck steering
+  // ---------------------------------------------------------------------------
+
+  describe('tick() truck steering', () => {
+    beforeEach(async () => {
+      await board.load();
+    });
+
+    it('no steer when roll is zero', () => {
+      const modelGroup = board.root.children[0].children[0] as THREE.Group;
+      const rearGroup  = modelGroup.children[1] as THREE.Group; // truckGroup1
+      const frontGroup = modelGroup.children[2] as THREE.Group; // truckGroup2
+
+      board.tick(makeTick({ roll: 0 }), 0);
+      board.tick(makeTick({ roll: 0 }), 100);
+
+      expect(rearGroup.rotation.y).toBeCloseTo(0, 5);
+      expect(frontGroup.rotation.y).toBeCloseTo(0, 5);
+    });
+
+    it('front truck rotation.y is negative when roll is positive', () => {
+      const modelGroup = board.root.children[0].children[0] as THREE.Group;
+      const frontGroup = modelGroup.children[2] as THREE.Group; // truckGroup2
+
+      board.tick(makeTick({ roll: 0.3 }), 0);
+
+      expect(frontGroup.rotation.y).toBeLessThan(0);
+    });
+
+    it('rear truck rotation.y is positive when roll is positive', () => {
+      const modelGroup = board.root.children[0].children[0] as THREE.Group;
+      const rearGroup  = modelGroup.children[1] as THREE.Group; // truckGroup1
+
+      board.tick(makeTick({ roll: 0.3 }), 0);
+
+      expect(rearGroup.rotation.y).toBeGreaterThan(0);
+    });
+
+    it('front and rear steer are symmetric (frontY === -rearY)', () => {
+      const modelGroup = board.root.children[0].children[0] as THREE.Group;
+      const rearGroup  = modelGroup.children[1] as THREE.Group; // truckGroup1
+      const frontGroup = modelGroup.children[2] as THREE.Group; // truckGroup2
+
+      board.tick(makeTick({ roll: 0.3 }), 0);
+
+      expect(frontGroup.rotation.y).toBeCloseTo(-rearGroup.rotation.y, 10);
     });
   });
 

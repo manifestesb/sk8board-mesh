@@ -84,8 +84,6 @@ export interface SkateboardOptions {
   dracoPath?: string;
   /** Truck color hex string. Default: '#888888' */
   truckColor?: string;
-  /** Bolt color hex string. Default: '#888888' */
-  boltColor?: string;
   /**
    * Peak jump height in Three.js units when jumpHeight is not in the tick.
    * Default: 0.8

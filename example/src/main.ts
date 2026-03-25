@@ -82,7 +82,7 @@ new RGBELoader().load(warehouseHdrUrl, (texture) => {
 // Skateboard
 // ---------------------------------------------------------------------------
 
-const board = new Skateboard({ truckColor: '#aaaaaa', boltColor: '#cccccc' });
+const board = new Skateboard({ truckColor: '#aaaaaa' });
 
 board.load().then(() => {
   scene.add(board.root);
