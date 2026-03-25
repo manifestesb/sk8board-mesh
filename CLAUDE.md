@@ -138,7 +138,7 @@ serves parent assets during dev.
 ### GLTF Node Names
 
 Named nodes used in `Skateboard.ts`: `GripTape`, `Wheel1`–`Wheel4`, `Deck`,
-`Bolts`, `Baseplates`, `Truck1`–`Truck2`.
+`Bolts`, `Baseplates`, `TruckRear`, `TruckFront`.
 Renaming these in the model file will break the loader.
 
 ### Sensor Axis Convention
@@ -147,3 +147,60 @@ Defined in `src/types.ts`: IMU is mounted on the rear truck with a specific
 orientation. Roll/pitch/yaw axes correspond
 to skateboard motion — read the comments in `types.ts` before modifying sensor
 fusion logic.
+
+## Commit Message
+
+### 1. Structure
+
+All commit messages must follow this structure:
+
+Capitalized, short (50 chars or less) summary
+
+More detailed explanatory text, if necessary. Wrap it to about 72
+characters or so. The blank line separating the summary from the
+body is critical.
+
+- Bullet points are okay, too
+- Use a hanging indent
+
+### 2. The Subject Line (The Summary)
+
+* **Limit Length:** Aim for 50 characters. Do not exceed 60.
+* **Capitalization:** Start with a capital letter.
+* **No Period:** Do not end the subject line with a period.
+* **Imperative Mood:** Use the imperative mood ("Fix bug," "Add feature," "Refactor subsystem").
+* *Context:* A commit should be viewed as an instruction to the codebase to change its state.
+* *Test:* It should complete the sentence: "If applied, this commit will **[your subject line]**."
+
+* **Separation:** Always follow the subject line with a single blank line.
+
+### 3. The Body (The Explanation)
+
+* **Wrap at 72:** Hard-wrap all text at 72 characters to ensure readability in standard terminal pagers.
+* **Content:** Focus on the "why" and "what," rather than the "how" (the code shows how). Explain the technical details or context that cannot fit in the subject line.
+* **Paragraphs:** Use blank lines between paragraphs for legibility.
+
+### 4. Bullet Points
+
+* **Style:** Use a hyphen (`-`) or asterisk (`*`) followed by a space.
+* **Indentation:** Use hanging indents for multi-line bullet points to maintain the 72-character margin.
+
+### 5. Checklist Before Committing
+
+1. Is the first line < 50 chars?
+2. Is the first word a capitalized imperative verb?
+3. Is there a blank line between the subject and body?
+4. Is the body wrapped at 72 characters?
+5. Does the message explain *why* the change was made?
+
+#### Example of a "Perfect" Commit:
+
+Redirect user to dashboard after successful login
+
+The previous implementation left the user on the login page with
+a success toast. Users found this confusing. This change ensures
+they are immediately routed to their landing page.
+
+- Updated the AuthController redirect path
+- Added a regression test for the login flow
+- Cleared the sensitive 'temp_token' from session storage

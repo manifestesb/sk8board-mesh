@@ -120,7 +120,7 @@
 		},
 		{
 			"mesh":8,
-			"name":"Truck1",
+			"name":"TruckRear",
 			"translation":[
 				0.0003290097520221025,
 				0.10145720839500427,
@@ -129,7 +129,7 @@
 		},
 		{
 			"mesh":9,
-			"name":"Truck2",
+			"name":"TruckFront",
 			"rotation":[
 				0,
 				-1,
@@ -357,7 +357,7 @@
 			]
 		},
 		{
-			"name":"Truck1.001",
+			"name":"TruckRear",
 			"primitives":[
 				{
 					"attributes":{
@@ -383,7 +383,7 @@
 			]
 		},
 		{
-			"name":"Truck2",
+			"name":"TruckFront",
 			"primitives":[
 				{
 					"attributes":{

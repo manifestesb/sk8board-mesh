@@ -63,8 +63,8 @@ interface GLTFNodes {
   Wheel4:     THREE.Object3D;
   Deck:       THREE.Object3D;
   Baseplates: THREE.Object3D;
-  Truck1:     THREE.Object3D;
-  Truck2:     THREE.Object3D;
+  TruckRear:  THREE.Object3D;
+  TruckFront: THREE.Object3D;
 }
 
 interface ResolvedOptions {
@@ -86,8 +86,8 @@ interface ResolvedOptions {
  * Hierarchy:
  *   root (yaw) → jumpGroup (Y) → modelGroup (carve Y)
  *     ├── deckLean.group (roll/pitch)  ← deck, griptape, bolts, baseplates
- *     ├── rearGroup  (steer/compression, no lean)  ← Truck1 hanger + wheels
- *     └── frontGroup (steer/compression, no lean)  ← Truck2 hanger + wheels
+ *     ├── rearGroup  (steer/compression, no lean)  ← TruckRear hanger + wheels
+ *     └── frontGroup (steer/compression, no lean)  ← TruckFront hanger + wheels
  *
  * Usage:
  *   const board = new Skateboard();
@@ -268,7 +268,7 @@ export class Skateboard implements Loadable, Tickable, Disposable {
 
     const required = [
       'GripTape', 'Wheel1', 'Wheel2', 'Wheel3', 'Wheel4',
-      'Deck', 'Baseplates', 'Truck1', 'Truck2',
+      'Deck', 'Baseplates', 'TruckRear', 'TruckFront',
     ] as const;
 
     for (const key of required) {
@@ -363,22 +363,22 @@ export class Skateboard implements Loadable, Tickable, Disposable {
       mesh(nodes.Baseplates, mats.truck,    [0, 0.211 - P,  0]),
     );
 
-    // Rear truck group (Truck1 + Wheel3 + Wheel4) — stays flat, steers.
+    // Rear truck group (TruckRear + Wheel3 + Wheel4) — stays flat, steers.
     const rearGroup = new THREE.Group();
     rearGroup.position.set(0, 0.101, -0.617);
     const w3 = mesh(nodes.Wheel3, mats.wheel, [ 0.237, -0.015, -0.018], [Math.PI, 0, Math.PI]);
     const w4 = mesh(nodes.Wheel4, mats.wheel, [-0.238, -0.015, -0.018], [Math.PI, 0, Math.PI]);
-    rearGroup.add(mesh(nodes.Truck1, mats.truck, [0, 0, 0]), w3, w4);
+    rearGroup.add(mesh(nodes.TruckRear, mats.truck, [0, 0, 0]), w3, w4);
     this.modelGroup.add(rearGroup);
     this.truckGroup1 = rearGroup;
     this.wheels.push(w3, w4);
 
-    // Front truck group (Truck2 + Wheel1 + Wheel2) — stays flat, steers.
+    // Front truck group (TruckFront + Wheel1 + Wheel2) — stays flat, steers.
     const frontGroup = new THREE.Group();
     frontGroup.position.set(0, 0.101, 0.617);
     const w1 = mesh(nodes.Wheel1, mats.wheel, [ 0.238, -0.015, 0.018]);
     const w2 = mesh(nodes.Wheel2, mats.wheel, [-0.237, -0.015, 0.018]);
-    frontGroup.add(mesh(nodes.Truck2, mats.truck, [0, 0, 0], [Math.PI, 0, Math.PI]), w1, w2);
+    frontGroup.add(mesh(nodes.TruckFront, mats.truck, [0, 0, 0], [Math.PI, 0, Math.PI]), w1, w2);
     this.modelGroup.add(frontGroup);
     this.truckGroup2 = frontGroup;
     this.wheels.push(w1, w2);

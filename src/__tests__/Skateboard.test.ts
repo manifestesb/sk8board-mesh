@@ -26,7 +26,7 @@ function makeFakeGltfScene() {
   const scene = new THREE.Group();
   const nodeNames = [
     'GripTape', 'Wheel1', 'Wheel2', 'Wheel3', 'Wheel4',
-    'Deck', 'Bolts', 'Baseplates', 'Truck1', 'Truck2',
+    'Deck', 'Bolts', 'Baseplates', 'TruckRear', 'TruckFront',
   ];
   for (const name of nodeNames) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1));
