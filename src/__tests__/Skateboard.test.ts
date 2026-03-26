@@ -25,7 +25,7 @@ vi.mock('three/examples/jsm/loaders/DRACOLoader.js', () => ({
 function makeFakeGltfScene() {
   const scene = new THREE.Group();
   const nodeNames = [
-    'GripTape', 'Wheel1', 'Wheel2', 'Wheel3', 'Wheel4',
+    'GripTape', 'WheelFrontRight', 'WheelFrontLeft', 'WheelRearRight', 'WheelRearLeft',
     'Deck', 'Bolts', 'Baseplates', 'TruckRear', 'TruckFront',
   ];
   for (const name of nodeNames) {

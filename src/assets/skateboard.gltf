@@ -39,7 +39,7 @@
 		},
 		{
 			"mesh":1,
-			"name":"Wheel1",
+			"name":"WheelFrontRight",
 			"translation":[
 				0.2375318855047226,
 				0.0862356573343277,
@@ -48,7 +48,7 @@
 		},
 		{
 			"mesh":2,
-			"name":"Wheel2",
+			"name":"WheelFrontLeft",
 			"translation":[
 				-0.2368500977754593,
 				0.08621575683355331,
@@ -66,7 +66,7 @@
 		},
 		{
 			"mesh":4,
-			"name":"Wheel4",
+			"name":"WheelRearLeft",
 			"rotation":[
 				0,
 				-1,
@@ -96,7 +96,7 @@
 		},
 		{
 			"mesh":6,
-			"name":"Wheel3",
+			"name":"WheelRearRight",
 			"rotation":[
 				0,
 				-1,
@@ -171,7 +171,7 @@
 			]
 		},
 		{
-			"name":"Wheel1",
+			"name":"WheelFrontRight",
 			"primitives":[
 				{
 					"attributes":{
@@ -197,7 +197,7 @@
 			]
 		},
 		{
-			"name":"Wheel2",
+			"name":"WheelFrontLeft",
 			"primitives":[
 				{
 					"attributes":{
@@ -249,7 +249,7 @@
 			]
 		},
 		{
-			"name":"Wheel4",
+			"name":"WheelRearLeft",
 			"primitives":[
 				{
 					"attributes":{
@@ -305,7 +305,7 @@
 			]
 		},
 		{
-			"name":"Wheel3",
+			"name":"WheelRearRight",
 			"primitives":[
 				{
 					"attributes":{

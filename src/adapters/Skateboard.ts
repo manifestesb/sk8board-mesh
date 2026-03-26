@@ -57,10 +57,10 @@ const JUMP_RISE_DELAY    = 0.26;
 
 interface GLTFNodes {
   GripTape:   THREE.Object3D;
-  Wheel1:     THREE.Object3D;
-  Wheel2:     THREE.Object3D;
-  Wheel3:     THREE.Object3D;
-  Wheel4:     THREE.Object3D;
+  WheelFrontRight: THREE.Object3D;
+  WheelFrontLeft:  THREE.Object3D;
+  WheelRearRight:  THREE.Object3D;
+  WheelRearLeft:   THREE.Object3D;
   Deck:       THREE.Object3D;
   Baseplates: THREE.Object3D;
   TruckRear:  THREE.Object3D;
@@ -267,7 +267,7 @@ export class Skateboard implements Loadable, Tickable, Disposable {
     scene.traverse((obj) => { if (obj.name) all[obj.name] = obj; });
 
     const required = [
-      'GripTape', 'Wheel1', 'Wheel2', 'Wheel3', 'Wheel4',
+      'GripTape', 'WheelFrontRight', 'WheelFrontLeft', 'WheelRearRight', 'WheelRearLeft',
       'Deck', 'Baseplates', 'TruckRear', 'TruckFront',
     ] as const;
 
@@ -366,8 +366,8 @@ export class Skateboard implements Loadable, Tickable, Disposable {
     // Rear truck group (TruckRear + Wheel3 + Wheel4) — stays flat, steers.
     const rearGroup = new THREE.Group();
     rearGroup.position.set(0, 0.101, -0.617);
-    const w3 = mesh(nodes.Wheel3, mats.wheel, [ 0.237, -0.015, -0.018], [Math.PI, 0, Math.PI]);
-    const w4 = mesh(nodes.Wheel4, mats.wheel, [-0.238, -0.015, -0.018], [Math.PI, 0, Math.PI]);
+    const w3 = mesh(nodes.WheelRearRight, mats.wheel, [ 0.237, -0.015, -0.018], [Math.PI, 0, Math.PI]);
+    const w4 = mesh(nodes.WheelRearLeft,  mats.wheel, [-0.238, -0.015, -0.018], [Math.PI, 0, Math.PI]);
     rearGroup.add(mesh(nodes.TruckRear, mats.truck, [0, 0, 0]), w3, w4);
     this.modelGroup.add(rearGroup);
     this.truckGroup1 = rearGroup;
@@ -376,8 +376,8 @@ export class Skateboard implements Loadable, Tickable, Disposable {
     // Front truck group (TruckFront + Wheel1 + Wheel2) — stays flat, steers.
     const frontGroup = new THREE.Group();
     frontGroup.position.set(0, 0.101, 0.617);
-    const w1 = mesh(nodes.Wheel1, mats.wheel, [ 0.238, -0.015, 0.018]);
-    const w2 = mesh(nodes.Wheel2, mats.wheel, [-0.237, -0.015, 0.018]);
+    const w1 = mesh(nodes.WheelFrontRight, mats.wheel, [ 0.238, -0.015, 0.018]);
+    const w2 = mesh(nodes.WheelFrontLeft,  mats.wheel, [-0.237, -0.015, 0.018]);
     frontGroup.add(mesh(nodes.TruckFront, mats.truck, [0, 0, 0], [Math.PI, 0, Math.PI]), w1, w2);
     this.modelGroup.add(frontGroup);
     this.truckGroup2 = frontGroup;

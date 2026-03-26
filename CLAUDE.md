@@ -137,8 +137,9 @@ serves parent assets during dev.
 
 ### GLTF Node Names
 
-Named nodes used in `Skateboard.ts`: `GripTape`, `Wheel1`–`Wheel4`, `Deck`,
-`Bolts`, `Baseplates`, `TruckRear`, `TruckFront`.
+Named nodes used in `Skateboard.ts`: `GripTape`, `WheelFrontRight`,
+`WheelFrontLeft`, `WheelRearRight`, `WheelRearLeft`, `Deck`, `Bolts`,
+`Baseplates`, `TruckRear`, `TruckFront`.
 Renaming these in the model file will break the loader.
 
 ### Sensor Axis Convention
