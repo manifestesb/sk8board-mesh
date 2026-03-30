@@ -48,6 +48,12 @@ export interface SkateboardTick {
   airborne: boolean;
   /** Estimated peak jump height in Three.js units (optional) */
   jumpHeight?: number;
+  /**
+   * Full board roll around the longitudinal axis — radians (0–2π).
+   * Applied visually at all times; truck steering continues to be driven
+   * by `roll`. Represents the rotation of a flip motion.
+   */
+  boardRoll?: number;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,21 +1,9 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import gsap from 'gsap';
 import type { SkateboardTick, SkateboardOptions } from '../core/types.js';
 import { PhysicsRig, type RigState } from './PhysicsRig.js';
-import { DeckLean } from './DeckLean.js';
-
-// ---------------------------------------------------------------------------
-// Asset imports — resolved by Vite (or compatible bundler) at build time.
-// The assets live alongside the library source; no public/ paths needed.
-// ---------------------------------------------------------------------------
-import gltfUrl         from '../assets/skateboard.gltf?url';
-import gripDiffuseUrl  from '../assets/skateboard/griptape-diffuse.webp?url';
-import gripRoughUrl    from '../assets/skateboard/griptape-roughness.webp?url';
-import metalNormalUrl  from '../assets/skateboard/metal-normal.avif?url';
-import deckUrl         from '../assets/skateboard/Deck.webp?url';
-import wheelUrl        from '../assets/skateboard/SkateWheel1.png?url';
+import type { Mountable, BoardRig } from './Mountable.js';
+import { SkateboardAsset } from './SkateboardAsset.js';
 
 // ---------------------------------------------------------------------------
 // Capability interfaces
@@ -34,17 +22,8 @@ export interface Disposable {
 }
 
 // ---------------------------------------------------------------------------
-// Constants derived from the GLTF model geometry
+// Constants
 // ---------------------------------------------------------------------------
-
-/** Wheel center height from ground — from GLTF node position.y */
-const WHEEL_RADIUS = 0.086;
-
-/** Y position of the hanger groups — used as the deck lean pivot so that the
- *  baseplate rotates around the same height as the kingpin/pivot-cup connection,
- *  keeping the baseplate↔hanger joint visually aligned during lean. */
-const DECK_PIVOT_Y = 0.141;
-
 
 /** Jump timing from InteractiveSkateboard.tsx */
 const JUMP_RISE_DURATION = 0.51;
@@ -54,18 +33,6 @@ const JUMP_RISE_DELAY    = 0.26;
 // ---------------------------------------------------------------------------
 // Internal types
 // ---------------------------------------------------------------------------
-
-interface GLTFNodes {
-  GripTape:   THREE.Object3D;
-  WheelFrontRight: THREE.Object3D;
-  WheelFrontLeft:  THREE.Object3D;
-  WheelRearRight:  THREE.Object3D;
-  WheelRearLeft:   THREE.Object3D;
-  Deck:       THREE.Object3D;
-  Baseplates: THREE.Object3D;
-  TruckRear:  THREE.Object3D;
-  TruckFront: THREE.Object3D;
-}
 
 interface ResolvedOptions {
   dracoPath:         string;
@@ -85,9 +52,19 @@ interface ResolvedOptions {
  *
  * Hierarchy:
  *   root (yaw) → jumpGroup (Y) → modelGroup (carve Y)
- *     ├── deckLean.group (roll/pitch)  ← deck, griptape, bolts, baseplates
- *     ├── rearGroup  (steer/compression, no lean)  ← TruckRear hanger + wheels
- *     └── frontGroup (steer/compression, no lean)  ← TruckFront hanger + wheels
+ *     → rearPitchPivot  (rotation.x = pitch>0 ? -pitch : 0, pivots at rear axle)
+ *     → rearPitchInverse
+ *     → frontPitchPivot (rotation.x = pitch<0 ? -pitch : 0, pivots at front axle)
+ *     → frontPitchInverse
+ *     → flipGroup (boardRoll Z, pivot at deck height)
+ *         → flipInverse
+ *             ├── deckLean.group (lean Z)  ← deck, griptape, bolts, baseplates
+ *             ├── rearTruck  (steer Y)     ← hanger + wheels
+ *             └── frontTruck (steer Y)     ← hanger + wheels
+ *
+ * Pitch sign convention (matches IMU telemetry):
+ *   pitch > 0 → nose up   (tail down, rear axle is fixed pivot)
+ *   pitch < 0 → nose down (tail up,   front axle is fixed pivot)
  *
  * Usage:
  *   const board = new Skateboard();
@@ -102,39 +79,59 @@ interface ResolvedOptions {
 export class Skateboard implements Loadable, Tickable, Disposable {
   /**
    * Root Three.js group — add this to your scene.
-   * Hierarchy: root (yaw) → jumpGroup (Y) → modelGroup (carve Y)
+   * Hierarchy: root (yaw) → jumpGroup (Y) → modelGroup (carve Y) → …
    */
   readonly root: THREE.Group;
 
-  private readonly jumpGroup:  THREE.Group;
-  private readonly modelGroup: THREE.Group;
-  private readonly deckLean = new DeckLean();
+  private readonly jumpGroup:        THREE.Group;
+  private readonly modelGroup:       THREE.Group;
+  private readonly rearPitchPivot:   THREE.Group;
+  private readonly rearPitchInverse: THREE.Group;
+  private readonly frontPitchPivot:  THREE.Group;
+  private readonly frontPitchInverse: THREE.Group;
+  private readonly flipGroup:        THREE.Group;
+  private readonly flipInverse:      THREE.Group;
+  private readonly model:            Mountable;
 
-  private wheels:      THREE.Object3D[]  = [];
-  private truckGroup1: THREE.Group | null = null;
-  private truckGroup2: THREE.Group | null = null;
+  private rig: BoardRig | null = null;
 
   private readonly physicsRig = new PhysicsRig();
 
   private isJumping    = false;
   private prevAirborne = false;
   private lastTime: number | null = null;
+  private currentPitch = 0;
 
   private readonly options: ResolvedOptions;
 
-  constructor(options: SkateboardOptions = {}) {
+  constructor(options: SkateboardOptions = {}, model?: Mountable) {
     this.options = {
       dracoPath:         options.dracoPath         ?? '/draco/',
       defaultJumpHeight: options.defaultJumpHeight ?? 0.8,
       truckColor:        options.truckColor        ?? '#888888',
     };
 
-    this.root       = new THREE.Group();
-    this.jumpGroup  = new THREE.Group();
-    this.modelGroup = new THREE.Group();
+    this.model = model ?? new SkateboardAsset({
+      dracoPath:  this.options.dracoPath,
+      truckColor: this.options.truckColor,
+    });
 
-    this.deckLean.group.position.y = DECK_PIVOT_Y;
-    this.modelGroup.add(this.deckLean.group);
+    this.root              = new THREE.Group();
+    this.jumpGroup         = new THREE.Group();
+    this.modelGroup        = new THREE.Group();
+    this.rearPitchPivot    = new THREE.Group();
+    this.rearPitchInverse  = new THREE.Group();
+    this.frontPitchPivot   = new THREE.Group();
+    this.frontPitchInverse = new THREE.Group();
+    this.flipGroup         = new THREE.Group();
+    this.flipInverse       = new THREE.Group();
+
+    this.flipGroup.add(this.flipInverse);
+    this.frontPitchInverse.add(this.flipGroup);
+    this.frontPitchPivot.add(this.frontPitchInverse);
+    this.rearPitchInverse.add(this.frontPitchPivot);
+    this.rearPitchPivot.add(this.rearPitchInverse);
+    this.modelGroup.add(this.rearPitchPivot);
     this.jumpGroup.add(this.modelGroup);
     this.root.add(this.jumpGroup);
   }
@@ -144,18 +141,23 @@ export class Skateboard implements Loadable, Tickable, Disposable {
   // ---------------------------------------------------------------------------
 
   async load(): Promise<void> {
-    const draco = new DRACOLoader();
-    draco.setDecoderPath(this.options.dracoPath);
+    this.rig = await this.model.mount(this.flipInverse);
 
-    const loader = new GLTFLoader();
-    loader.setDRACOLoader(draco);
+    // Position the flip pivot at deck-lean height so boardRoll rotates the
+    // board around its own longitudinal centre, not the ground.
+    const deckY = this.rig.deckLean.group.position.y;
+    this.flipGroup.position.y   =  deckY;
+    this.flipInverse.position.y = -deckY;
 
-    const gltf = await loader.loadAsync(gltfUrl);
-    const nodes = this.extractNodes(gltf.scene);
-    const materials = this.buildMaterials();
-
-    this.mountMeshes(nodes, materials);
-    draco.dispose();
+    // Position pitch pivots at each truck axle so rotation stays fixed at the
+    // axle. When all rotations are zero the pivot+inverse pairs cancel to net
+    // zero displacement, so the board stays at its rest position.
+    const rearPos  = this.rig.rearTruck.position;
+    const frontPos = this.rig.frontTruck.position;
+    this.rearPitchPivot.position.set(0,  rearPos.y,  rearPos.z);
+    this.rearPitchInverse.position.set(0, -rearPos.y, -rearPos.z);
+    this.frontPitchPivot.position.set(0,  frontPos.y,  frontPos.z);
+    this.frontPitchInverse.position.set(0, -frontPos.y, -frontPos.z);
   }
 
   // ---------------------------------------------------------------------------
@@ -168,6 +170,7 @@ export class Skateboard implements Loadable, Tickable, Disposable {
 
     const rig = this.physicsRig.simulate(data, dt);
     this.applyOrientation(data, dt);
+    this.applyBoardRoll(data);
     this.spinWheels(rig.wheelAngularVelocity, dt);
     this.applyCarve(rig);
     this.updateJump(data);
@@ -178,14 +181,7 @@ export class Skateboard implements Loadable, Tickable, Disposable {
   // ---------------------------------------------------------------------------
 
   dispose(): void {
-    this.modelGroup.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) {
-        obj.geometry.dispose();
-        const mat = obj.material;
-        if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
-        else mat.dispose();
-      }
-    });
+    this.model.dispose();
     gsap.killTweensOf(this.jumpGroup.position);
   }
 
@@ -194,7 +190,15 @@ export class Skateboard implements Loadable, Tickable, Disposable {
   // ---------------------------------------------------------------------------
 
   private applyOrientation(data: SkateboardTick, dt: number): void {
-    this.deckLean.lean(data.roll, data.pitch, dt);
+    this.rig?.deckLean.lean(data.roll, 0, dt);
+
+    // Smooth pitch then distribute to the correct axle pivot.
+    // pitch > 0 → nose up  → rear axle fixed: rearPitchPivot.rotation.x = -pitch
+    // pitch < 0 → nose down → front axle fixed: frontPitchPivot.rotation.x = -pitch
+    const pitchFactor = 1 - Math.pow(0.001, dt * 6);
+    this.currentPitch = THREE.MathUtils.lerp(this.currentPitch, data.pitch, pitchFactor);
+    this.rearPitchPivot.rotation.x  = this.currentPitch > 0 ? -this.currentPitch : 0;
+    this.frontPitchPivot.rotation.x = this.currentPitch < 0 ? -this.currentPitch : 0;
 
     const yawFactor = 1 - Math.pow(0.001, dt * 3);
     this.root.rotation.y = THREE.MathUtils.lerp(
@@ -207,8 +211,19 @@ export class Skateboard implements Loadable, Tickable, Disposable {
   // ---------------------------------------------------------------------------
 
   private spinWheels(angularVelocity: number, dt: number): void {
+    if (!this.rig) return;
     const delta = angularVelocity * dt;
-    for (const wheel of this.wheels) wheel.rotation.x += delta;
+    for (const wheel of this.rig.wheels) wheel.rotation.x += delta;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private — board roll (airborne flip motion)
+  // ---------------------------------------------------------------------------
+
+  private applyBoardRoll(data: SkateboardTick): void {
+
+    this.flipGroup.rotation.z = data.boardRoll ?? 0;
+
   }
 
   // ---------------------------------------------------------------------------
@@ -216,10 +231,13 @@ export class Skateboard implements Loadable, Tickable, Disposable {
   // ---------------------------------------------------------------------------
 
   private applyCarve(rig: RigState): void {
-    // Steer: front truck −θ, rear truck +θ (opposite directions; sign validated
-    // against Three.js Y-axis convention where positive = counter-clockwise from above)
-    if (this.truckGroup2) this.truckGroup2.rotation.y = -rig.steerAngle; // front
-    if (this.truckGroup1) this.truckGroup1.rotation.y =  rig.steerAngle; // rear
+    if (this.rig) {
+      // Steer: front truck −θ, rear truck +θ (opposite directions; sign validated
+      // against Three.js Y-axis convention where positive = counter-clockwise from above)
+      this.rig.frontTruck.rotation.y = -rig.steerAngle;
+      this.rig.rearTruck.rotation.y  =  rig.steerAngle;
+      this.rig.truckAnimation?.animate(rig.steerAngle, this.rig.deckLean.group.rotation.z);
+    }
 
     this.modelGroup.rotation.y = rig.carveAngle;
   }
@@ -256,131 +274,5 @@ export class Skateboard implements Loadable, Tickable, Disposable {
       .to(this.jumpGroup.position, {
         y: 0, duration: JUMP_FALL_DURATION, ease: 'power2.in',
       });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Private — model setup
-  // ---------------------------------------------------------------------------
-
-  private extractNodes(scene: THREE.Group): GLTFNodes {
-    const all: Record<string, THREE.Object3D> = {};
-    scene.traverse((obj) => { if (obj.name) all[obj.name] = obj; });
-
-    const required = [
-      'GripTape', 'WheelFrontRight', 'WheelFrontLeft', 'WheelRearRight', 'WheelRearLeft',
-      'Deck', 'Baseplates', 'TruckRear', 'TruckFront',
-    ] as const;
-
-    for (const key of required) {
-      if (!all[key]) {
-        const found = Object.keys(all).join(', ') || '(none)';
-        throw new Error(`sk8board: GLTF missing node "${key}". Found: ${found}`);
-      }
-    }
-
-    return all as unknown as GLTFNodes;
-  }
-
-  private buildMaterials() {
-    const tx = new THREE.TextureLoader();
-
-    const loadColor = (url: string) => {
-      const t = tx.load(url);
-      t.flipY = false;
-      t.colorSpace = THREE.SRGBColorSpace;
-      return t;
-    };
-
-    const loadData = (url: string) => {
-      const t = tx.load(url);
-      t.flipY = false;
-      t.colorSpace = THREE.NoColorSpace;
-      return t;
-    };
-
-    const loadRepeatColor = (url: string, rx: number, ry: number) => {
-      const t = loadColor(url);
-      t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(rx, ry);
-      t.anisotropy = 8;
-      return t;
-    };
-
-    const loadRepeatData = (url: string, rx: number, ry: number) => {
-      const t = loadData(url);
-      t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(rx, ry);
-      t.anisotropy = 8;
-      return t;
-    };
-
-    const gripTape = new THREE.MeshStandardMaterial({
-      map:          loadRepeatColor(gripDiffuseUrl, 9, 9),
-      bumpMap:      loadRepeatData(gripRoughUrl,    9, 9),
-      roughnessMap: loadRepeatData(gripRoughUrl,    9, 9),
-      bumpScale: 3.5, roughness: 0.8, color: '#555555',
-    });
-
-    const deck = new THREE.MeshStandardMaterial({
-      map: loadColor(deckUrl), roughness: 0.1,
-    });
-
-    const wheel = new THREE.MeshStandardMaterial({
-      map: loadColor(wheelUrl), roughness: 0.35,
-    });
-
-    const truck = new THREE.MeshStandardMaterial({
-      color:       this.options.truckColor,
-      normalMap:   loadRepeatData(metalNormalUrl, 8, 8),
-      normalScale: new THREE.Vector2(0.3, 0.3),
-      metalness: 0.8, roughness: 0.25,
-    });
-
-    return { gripTape, deck, wheel, truck };
-  }
-
-  private mountMeshes(nodes: GLTFNodes, mats: ReturnType<Skateboard['buildMaterials']>): void {
-    const mesh = (
-      node: THREE.Object3D,
-      material: THREE.Material,
-      position: [number, number, number],
-      rotation?: [number, number, number],
-    ): THREE.Mesh => {
-      const m = new THREE.Mesh((node as THREE.Mesh).geometry, material);
-      m.castShadow = m.receiveShadow = true;
-      m.position.set(...position);
-      if (rotation) m.rotation.set(...rotation);
-      return m;
-    };
-
-    // Deck assembly — lean with roll/pitch.
-    // Positions are relative to DECK_PIVOT_Y so the rotation pivots at the
-    // hanger connection height, keeping the baseplate↔hanger joint aligned.
-    const P = DECK_PIVOT_Y;
-    this.deckLean.group.add(
-      mesh(nodes.GripTape,   mats.gripTape, [0, 0.286 - P, -0.002]),
-      mesh(nodes.Deck,       mats.deck,     [0, 0.271 - P, -0.002]),
-      mesh(nodes.Baseplates, mats.truck,    [0, 0.211 - P,  0]),
-    );
-
-    // Rear truck group (TruckRear + Wheel3 + Wheel4) — stays flat, steers.
-    const rearGroup = new THREE.Group();
-    rearGroup.position.set(0, 0.101, -0.617);
-    const w3 = mesh(nodes.WheelRearRight, mats.wheel, [ 0.237, -0.015, -0.018], [Math.PI, 0, Math.PI]);
-    const w4 = mesh(nodes.WheelRearLeft,  mats.wheel, [-0.238, -0.015, -0.018], [Math.PI, 0, Math.PI]);
-    rearGroup.add(mesh(nodes.TruckRear, mats.truck, [0, 0, 0]), w3, w4);
-    this.modelGroup.add(rearGroup);
-    this.truckGroup1 = rearGroup;
-    this.wheels.push(w3, w4);
-
-    // Front truck group (TruckFront + Wheel1 + Wheel2) — stays flat, steers.
-    const frontGroup = new THREE.Group();
-    frontGroup.position.set(0, 0.101, 0.617);
-    const w1 = mesh(nodes.WheelFrontRight, mats.wheel, [ 0.238, -0.015, 0.018]);
-    const w2 = mesh(nodes.WheelFrontLeft,  mats.wheel, [-0.237, -0.015, 0.018]);
-    frontGroup.add(mesh(nodes.TruckFront, mats.truck, [0, 0, 0], [Math.PI, 0, Math.PI]), w1, w2);
-    this.modelGroup.add(frontGroup);
-    this.truckGroup2 = frontGroup;
-    this.wheels.push(w1, w2);
   }
 }

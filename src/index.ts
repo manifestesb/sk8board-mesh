@@ -1,6 +1,10 @@
 export { Skateboard } from './adapters/Skateboard.js';
 export type { Loadable, Tickable, Disposable } from './adapters/Skateboard.js';
 
+export { SkateboardAsset } from './adapters/SkateboardAsset.js';
+export { SkatieAsset }     from './adapters/SkatieAsset.js';
+export type { Mountable, BoardRig, TruckAnimatable } from './adapters/Mountable.js';
+
 export { PhysicsRig } from './adapters/PhysicsRig.js';
 export type { Simulatable, RigState } from './adapters/PhysicsRig.js';
 
@@ -21,4 +25,5 @@ export type {
 } from './core/types.js';
 
 // Asset URLs — resolved by Vite at build time, available to consumers
-export { default as warehouseHdrUrl } from './assets/hdr/warehouse-256.hdr?url';
+export { default as warehouseHdrUrl  } from './assets/hdr/warehouse-256.hdr?url';
+export { default as skatieOrangeUrl  } from './assets/skatie/textures/skatie_orange.png?url';
