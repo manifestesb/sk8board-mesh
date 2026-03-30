@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -12,8 +13,29 @@ export default defineConfig({
   },
   server: {
     fs: {
-      // Permite servir assets da lib (../src/assets/) durante o dev
       allow: ['..'],
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        assetFileNames: (assetInfo) => {
+          const original = assetInfo.originalFileNames?.[0] ?? '';
+          const match = original.match(/src\/assets\/(.+)/);
+          if (match) return `assets/${match[1]}`;
+          return 'assets/[name]-[hash][extname]';
+        },
+      },
+    },
+  },
+  plugins: [
+    viteStaticCopy({
+      targets: [
+        {
+          src: path.resolve(__dirname, '../src/assets'),
+          dest: '.',
+        },
+      ],
+    }),
+  ],
 });
