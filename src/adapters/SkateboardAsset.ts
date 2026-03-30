@@ -21,7 +21,23 @@ import wheelUrl       from '../assets/skateboard/SkateWheel1.png?url';
 /** Y position of the hanger groups — used as the deck lean pivot so that the
  *  baseplate rotates around the same height as the kingpin/pivot-cup connection,
  *  keeping the baseplate↔hanger joint visually aligned during lean. */
-const DECK_PIVOT_Y = 0.141;
+const DECK_PIVOT_Y = 0.265;
+
+/** Deck mesh placement Y in deckLean space (0.271 − DECK_PIVOT_Y). */
+const DECK_OFFSET_Y = 0.0;
+
+/** Deck mesh placement Z in deckLean space. */
+const DECK_OFFSET_Z = -0.002;
+
+/** Deck GLTF bounding-box Y minimum (bottom surface). */
+const DECK_Y_MIN = 0.090;
+
+/** Deck GLTF bounding-box Y maximum (top surface). */
+const DECK_Y_MAX = 0.095;
+
+/** Deck GLTF bounding-box Z extremes (tail/nose). */
+const DECK_Z_MIN = -1.167;
+const DECK_Z_MAX =  1.167;
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -148,11 +164,19 @@ export class SkateboardAsset implements Mountable {
     modelGroup.add(deckLean.group, rearTruck, frontTruck);
     this.mountedGroup = modelGroup;
 
+    // Deck tip positions in model space (deckLean Y + mesh offset + geometry extremes)
+    const tipY = DECK_PIVOT_Y + DECK_OFFSET_Y + DECK_Y_MIN;
+    const tailZ = DECK_OFFSET_Z + DECK_Z_MIN;
+    const noseZ = DECK_OFFSET_Z + DECK_Z_MAX;
+
     return {
       deckLean,
       wheels:     [wRearRight, wRearLeft, wFrontRight, wFrontLeft],
       rearTruck,
       frontTruck,
+      tailTip: new THREE.Vector3(0, tipY, tailZ),
+      noseTip: new THREE.Vector3(0, tipY, noseZ),
+      deckHalfThickness: (DECK_Y_MAX - DECK_Y_MIN) / 2,
     };
   }
 

@@ -46,11 +46,15 @@ function makeTick(overrides = {}) {
   };
 }
 
-/** Creates a fake Mountable that populates modelGroup with deckLean + trucks */
-function makeFakeMountable(): Mountable {
+/** Creates a fake Mountable that populates modelGroup with deckLean + trucks.
+ *  When withTips is true, tailTip and noseTip are set to SkateboardAsset-like
+ *  geometry so the ground contact constraint activates. */
+function makeFakeMountable(withTips = false): Mountable {
   const deckLean   = new DeckLean();
   const rearTruck  = new THREE.Group();
   const frontTruck = new THREE.Group();
+  rearTruck.position.set(0, 0.101, -0.617);
+  frontTruck.position.set(0, 0.101, 0.617);
   const wheels     = [
     new THREE.Object3D(), new THREE.Object3D(),
     new THREE.Object3D(), new THREE.Object3D(),
@@ -59,7 +63,12 @@ function makeFakeMountable(): Mountable {
   return {
     mount: vi.fn().mockImplementation(async (modelGroup: THREE.Group) => {
       modelGroup.add(deckLean.group, rearTruck, frontTruck);
-      return { deckLean, wheels, rearTruck, frontTruck } satisfies BoardRig;
+      const rig: BoardRig = { deckLean, wheels, rearTruck, frontTruck };
+      if (withTips) {
+        rig.tailTip = new THREE.Vector3(0, 0.220, -1.165);
+        rig.noseTip = new THREE.Vector3(0, 0.220,  1.161);
+      }
+      return rig;
     }),
     dispose: vi.fn(),
   };
@@ -68,27 +77,44 @@ function makeFakeMountable(): Mountable {
 // ---------------------------------------------------------------------------
 // Hierarchy path helpers (root → … → node)
 //
-//   root[0]             = jumpGroup
-//   root[0][0]          = modelGroup
-//   root[0][0][0]       = rearPitchPivot
-//   root[0][0][0][0]    = rearPitchInverse
-//   root[0][0][0][0][0] = frontPitchPivot
-//   root[0][0][0][0][0][0]    = frontPitchInverse
-//   root[0][0][0][0][0][0][0] = flipGroup
-//   root[0][0][0][0][0][0][0][0] = flipInverse
+//   root[0]                                       = jumpGroup
+//   root[0][0]                                    = modelGroup
+//   root[0][0][0]                                 = rearPitchPivot
+//   root[0][0][0][0]                              = rearPitchInverse
+//   root[0][0][0][0][0]                           = tailContactPivot
+//   root[0][0][0][0][0][0]                        = tailContactInverse
+//   root[0][0][0][0][0][0][0]                     = frontPitchPivot
+//   root[0][0][0][0][0][0][0][0]                  = frontPitchInverse
+//   root[0][0][0][0][0][0][0][0][0]               = noseContactPivot
+//   root[0][0][0][0][0][0][0][0][0][0]            = noseContactInverse
+//   root[0][0][0][0][0][0][0][0][0][0][0]         = flipGroup
+//   root[0][0][0][0][0][0][0][0][0][0][0][0]      = flipInverse
+//
+//   After load(), flipInverse has children:
+//     [0] = rollPivot → rollInverse → deckLean.group
+//     [1] = rearTruck
+//     [2] = frontTruck
 // ---------------------------------------------------------------------------
 
 type C = { children: THREE.Object3D[] };
 const c = (n: C) => n.children[0];
 
-function getJumpGroup(board: Skateboard)         { return c(board.root) as THREE.Group; }
-function getModelGroup(board: Skateboard)        { return c(getJumpGroup(board)) as THREE.Group; }
-function getRearPitchPivot(board: Skateboard)    { return c(getModelGroup(board)) as THREE.Group; }
-function getRearPitchInverse(board: Skateboard)  { return c(getRearPitchPivot(board)) as THREE.Group; }
-function getFrontPitchPivot(board: Skateboard)   { return c(getRearPitchInverse(board)) as THREE.Group; }
-function getFrontPitchInverse(board: Skateboard) { return c(getFrontPitchPivot(board)) as THREE.Group; }
-function getFlipGroup(board: Skateboard)         { return c(getFrontPitchInverse(board)) as THREE.Group; }
-function getFlipInverse(board: Skateboard)       { return c(getFlipGroup(board)) as THREE.Group; }
+function getJumpGroup(board: Skateboard)          { return c(board.root) as THREE.Group; }
+function getModelGroup(board: Skateboard)         { return c(getJumpGroup(board)) as THREE.Group; }
+function getRearPitchPivot(board: Skateboard)     { return c(getModelGroup(board)) as THREE.Group; }
+function getRearPitchInverse(board: Skateboard)   { return c(getRearPitchPivot(board)) as THREE.Group; }
+function getTailContactPivot(board: Skateboard)   { return c(getRearPitchInverse(board)) as THREE.Group; }
+function getTailContactInverse(board: Skateboard) { return c(getTailContactPivot(board)) as THREE.Group; }
+function getFrontPitchPivot(board: Skateboard)    { return c(getTailContactInverse(board)) as THREE.Group; }
+function getFrontPitchInverse(board: Skateboard)  { return c(getFrontPitchPivot(board)) as THREE.Group; }
+function getNoseContactPivot(board: Skateboard)   { return c(getFrontPitchInverse(board)) as THREE.Group; }
+function getNoseContactInverse(board: Skateboard) { return c(getNoseContactPivot(board)) as THREE.Group; }
+function getFlipGroup(board: Skateboard)          { return c(getNoseContactInverse(board)) as THREE.Group; }
+function getFlipInverse(board: Skateboard)        { return c(getFlipGroup(board)) as THREE.Group; }
+/** rollPivot is a branch inside flipInverse (added in load, not in the linear chain).
+ *  After load: flipInverse.children = [rearTruck, frontTruck, rollPivot] */
+function getRollPivot(board: Skateboard)          { return getFlipInverse(board).children[2] as THREE.Group; }
+function getRollInverse(board: Skateboard)        { return c(getRollPivot(board)) as THREE.Group; }
 
 describe('Skateboard', () => {
   let board: Skateboard;
@@ -126,16 +152,32 @@ describe('Skateboard', () => {
       expect(getRearPitchPivot(board).children).toHaveLength(1);
     });
 
-    it('rearPitchInverse has exactly one child (frontPitchPivot)', () => {
+    it('rearPitchInverse has exactly one child (tailContactPivot)', () => {
       expect(getRearPitchInverse(board).children).toHaveLength(1);
+    });
+
+    it('tailContactPivot has exactly one child (tailContactInverse)', () => {
+      expect(getTailContactPivot(board).children).toHaveLength(1);
+    });
+
+    it('tailContactInverse has exactly one child (frontPitchPivot)', () => {
+      expect(getTailContactInverse(board).children).toHaveLength(1);
     });
 
     it('frontPitchPivot has exactly one child (frontPitchInverse)', () => {
       expect(getFrontPitchPivot(board).children).toHaveLength(1);
     });
 
-    it('frontPitchInverse has exactly one child (flipGroup)', () => {
+    it('frontPitchInverse has exactly one child (noseContactPivot)', () => {
       expect(getFrontPitchInverse(board).children).toHaveLength(1);
+    });
+
+    it('noseContactPivot has exactly one child (noseContactInverse)', () => {
+      expect(getNoseContactPivot(board).children).toHaveLength(1);
+    });
+
+    it('noseContactInverse has exactly one child (flipGroup)', () => {
+      expect(getNoseContactInverse(board).children).toHaveLength(1);
     });
 
     it('flipGroup has exactly one child (flipInverse)', () => {
@@ -166,9 +208,9 @@ describe('Skateboard', () => {
       await expect(board.load()).resolves.toBeUndefined();
     });
 
-    it('adds deckLean.group, rearTruck, frontTruck to flipInverse after load', async () => {
+    it('adds rollPivot, rearTruck, frontTruck to flipInverse after load', async () => {
       await board.load();
-      // deckLean.group + rearTruck + frontTruck
+      // rollPivot (containing deckLean.group) + rearTruck + frontTruck
       expect(getFlipInverse(board).children.length).toBe(3);
     });
   });
@@ -192,11 +234,10 @@ describe('Skateboard', () => {
       expect(board.root.rotation.y).toBeGreaterThan(0);
     });
 
-    it('lerps deckGroup rotation.z toward roll', () => {
-      const deckGroup = getFlipInverse(board).children[0] as THREE.Group;
+    it('lerps rollPivot rotation.z toward roll', () => {
       board.tick(makeTick({ roll: 0.5 }), 0);
       board.tick(makeTick({ roll: 0.5 }), 100);
-      expect(deckGroup.rotation.z).toBeGreaterThan(0);
+      expect(getRollPivot(board).rotation.z).toBeGreaterThan(0);
     });
 
     it('rearPitchPivot.rotation.x becomes negative for positive pitch (nose up)', () => {
@@ -233,21 +274,19 @@ describe('Skateboard', () => {
 
     it('converges to target orientation over many ticks', () => {
       const target = 0.20; // within MAX_LEAN_ANGLE (0.23)
-      const deckGroup = getFlipInverse(board).children[0] as THREE.Group;
       let t = 0;
       for (let i = 0; i < 200; i++) {
         t += 16; // ~60fps
         board.tick(makeTick({ roll: target }), t);
       }
-      expect(deckGroup.rotation.z).toBeCloseTo(target, 1);
+      expect(getRollPivot(board).rotation.z).toBeCloseTo(target, 1);
     });
 
     it('returns to zero when target is zero', () => {
-      const deckGroup = getFlipInverse(board).children[0] as THREE.Group;
       let t = 0;
       for (let i = 0; i < 50; i++) { t += 16; board.tick(makeTick({ roll: 0.5 }), t); }
       for (let i = 0; i < 200; i++) { t += 16; board.tick(makeTick({ roll: 0 }), t); }
-      expect(deckGroup.rotation.z).toBeCloseTo(0, 1);
+      expect(getRollPivot(board).rotation.z).toBeCloseTo(0, 1);
     });
   });
 
@@ -289,8 +328,8 @@ describe('Skateboard', () => {
 
     it('no steer when roll is zero', () => {
       const flipInverse = getFlipInverse(board);
-      const rearGroup   = flipInverse.children[1] as THREE.Group; // rearTruck
-      const frontGroup  = flipInverse.children[2] as THREE.Group; // frontTruck
+      const rearGroup   = flipInverse.children[0] as THREE.Group; // rearTruck
+      const frontGroup  = flipInverse.children[1] as THREE.Group; // frontTruck
 
       board.tick(makeTick({ roll: 0 }), 0);
       board.tick(makeTick({ roll: 0 }), 100);
@@ -300,21 +339,21 @@ describe('Skateboard', () => {
     });
 
     it('front truck rotation.y is negative when roll is positive', () => {
-      const frontGroup = getFlipInverse(board).children[2] as THREE.Group; // frontTruck
+      const frontGroup = getFlipInverse(board).children[1] as THREE.Group; // frontTruck
       board.tick(makeTick({ roll: 0.3 }), 0);
       expect(frontGroup.rotation.y).toBeLessThan(0);
     });
 
     it('rear truck rotation.y is positive when roll is positive', () => {
-      const rearGroup = getFlipInverse(board).children[1] as THREE.Group; // rearTruck
+      const rearGroup = getFlipInverse(board).children[0] as THREE.Group; // rearTruck
       board.tick(makeTick({ roll: 0.3 }), 0);
       expect(rearGroup.rotation.y).toBeGreaterThan(0);
     });
 
     it('front and rear steer are symmetric (frontY === -rearY)', () => {
       const flipInverse = getFlipInverse(board);
-      const rearGroup   = flipInverse.children[1] as THREE.Group; // rearTruck
-      const frontGroup  = flipInverse.children[2] as THREE.Group; // frontTruck
+      const rearGroup   = flipInverse.children[0] as THREE.Group; // rearTruck
+      const frontGroup  = flipInverse.children[1] as THREE.Group; // frontTruck
 
       board.tick(makeTick({ roll: 0.3 }), 0);
 
@@ -344,6 +383,132 @@ describe('Skateboard', () => {
     it('flipGroup.rotation.z is 0 when boardRoll is absent', () => {
       board.tick(makeTick());
       expect(getFlipGroup(board).rotation.z).toBe(0);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // tick() — ground contact constraint
+  // ---------------------------------------------------------------------------
+
+  describe('tick() ground contact', () => {
+    let constrainedBoard: Skateboard;
+
+    beforeEach(async () => {
+      constrainedBoard = new Skateboard({}, makeFakeMountable(true));
+      await constrainedBoard.load();
+    });
+
+    afterEach(() => {
+      constrainedBoard.dispose();
+    });
+
+    it('tailContactPivot.rotation.x is 0 when pitch is below contact angle', () => {
+      // Small pitch — no constraint
+      let t = 0;
+      for (let i = 0; i < 200; i++) {
+        t += 16;
+        constrainedBoard.tick(makeTick({ pitch: 0.2 }), t);
+      }
+      expect(getTailContactPivot(constrainedBoard).rotation.x).toBe(0);
+    });
+
+    it('rearPitchPivot.rotation.x is capped when pitch exceeds contact angle', () => {
+      // Large pitch — constraint should activate
+      let t = 0;
+      for (let i = 0; i < 200; i++) {
+        t += 16;
+        constrainedBoard.tick(makeTick({ pitch: 1.0 }), t);
+      }
+      const rearRot = Math.abs(getRearPitchPivot(constrainedBoard).rotation.x);
+      // Should be capped at the contact angle (~0.4 rad), not reach 1.0
+      expect(rearRot).toBeLessThan(0.5);
+      expect(rearRot).toBeGreaterThan(0.3);
+    });
+
+    it('tailContactPivot.rotation.x absorbs the overflow', () => {
+      let t = 0;
+      for (let i = 0; i < 200; i++) {
+        t += 16;
+        constrainedBoard.tick(makeTick({ pitch: 1.0 }), t);
+      }
+      expect(getTailContactPivot(constrainedBoard).rotation.x).toBeLessThan(0);
+    });
+
+    it('noseContactPivot.rotation.x absorbs overflow for negative pitch', () => {
+      let t = 0;
+      for (let i = 0; i < 200; i++) {
+        t += 16;
+        constrainedBoard.tick(makeTick({ pitch: -1.0 }), t);
+      }
+      expect(getNoseContactPivot(constrainedBoard).rotation.x).toBeGreaterThan(0);
+    });
+
+    it('skips constraint when airborne', () => {
+      let t = 0;
+      for (let i = 0; i < 200; i++) {
+        t += 16;
+        constrainedBoard.tick(makeTick({ pitch: 1.0, airborne: true }), t);
+      }
+      // No capping — rearPitchPivot should have the full rotation
+      const rearRot = Math.abs(getRearPitchPivot(constrainedBoard).rotation.x);
+      expect(rearRot).toBeGreaterThan(0.9);
+      expect(getTailContactPivot(constrainedBoard).rotation.x).toBe(0);
+    });
+
+    it('constraint does not activate without tip data', () => {
+      // board (from beforeEach of parent describe) has no tips
+      let t = 0;
+      for (let i = 0; i < 200; i++) {
+        t += 16;
+        board.tick(makeTick({ pitch: 1.0 }), t);
+      }
+      const rearRot = Math.abs(getRearPitchPivot(board).rotation.x);
+      expect(rearRot).toBeGreaterThan(0.9);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // debugGroups()
+  // ---------------------------------------------------------------------------
+
+  describe('debugGroups()', () => {
+    it('returns group references matching the hierarchy', async () => {
+      await board.load();
+      const g = board.debugGroups();
+      expect(g.root).toBe(board.root);
+      expect(g.rearPitchPivot).toBe(getRearPitchPivot(board));
+      expect(g.frontPitchPivot).toBe(getFrontPitchPivot(board));
+      expect(g.tailContactPivot).toBe(getTailContactPivot(board));
+      expect(g.noseContactPivot).toBe(getNoseContactPivot(board));
+      expect(g.flipGroup).toBe(getFlipGroup(board));
+    });
+
+    it('returns deckLeanGroup after load', async () => {
+      await board.load();
+      const g = board.debugGroups();
+      expect(g.deckLeanGroup).toBeInstanceOf(THREE.Group);
+    });
+
+    it('returns null deckLeanGroup before load', () => {
+      const g = board.debugGroups();
+      expect(g.deckLeanGroup).toBeNull();
+    });
+
+    it('returns tip data when adapter provides it', async () => {
+      const tipped = new Skateboard({}, makeFakeMountable(true));
+      await tipped.load();
+      const g = tipped.debugGroups();
+      expect(g.tailTip).toBeInstanceOf(THREE.Vector3);
+      expect(g.noseTip).toBeInstanceOf(THREE.Vector3);
+      expect(g.tailContactAngle).toBeLessThan(Infinity);
+      tipped.dispose();
+    });
+
+    it('returns Infinity contact angles without tip data', async () => {
+      await board.load();
+      const g = board.debugGroups();
+      expect(g.tailContactAngle).toBe(Infinity);
+      expect(g.noseContactAngle).toBe(Infinity);
     });
   });
 

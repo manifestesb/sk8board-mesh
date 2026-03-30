@@ -106,6 +106,24 @@ describe('SkateboardAsset', () => {
       expect(modelGroup.children).toContain(rig.frontTruck);
     });
 
+    it('returns tailTip with negative Z (behind rear truck)', async () => {
+      asset = new SkateboardAsset(opts);
+      const rig = await asset.mount(new THREE.Group());
+      expect(rig.tailTip).toBeDefined();
+      expect(rig.tailTip!.x).toBe(0);
+      expect(rig.tailTip!.y).toBeGreaterThan(0);
+      expect(rig.tailTip!.z).toBeLessThan(rig.rearTruck.position.z);
+    });
+
+    it('returns noseTip with positive Z (ahead of front truck)', async () => {
+      asset = new SkateboardAsset(opts);
+      const rig = await asset.mount(new THREE.Group());
+      expect(rig.noseTip).toBeDefined();
+      expect(rig.noseTip!.x).toBe(0);
+      expect(rig.noseTip!.y).toBeGreaterThan(0);
+      expect(rig.noseTip!.z).toBeGreaterThan(rig.frontTruck.position.z);
+    });
+
     it('accepts custom truckColor without throwing', async () => {
       asset = new SkateboardAsset({ ...opts, truckColor: '#ff0000' });
       const modelGroup = new THREE.Group();

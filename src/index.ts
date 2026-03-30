@@ -1,5 +1,7 @@
 export { Skateboard } from './adapters/Skateboard.js';
-export type { Loadable, Tickable, Disposable } from './adapters/Skateboard.js';
+export type { Loadable, Tickable, Disposable, Debuggable, DebugGroups } from './adapters/Skateboard.js';
+
+export { PivotDebug } from './debug/PivotDebug.js';
 
 export { SkateboardAsset } from './adapters/SkateboardAsset.js';
 export { SkatieAsset }     from './adapters/SkatieAsset.js';
@@ -15,6 +17,9 @@ export type { Fusable } from './core/filters/ComplementaryFilter.js';
 
 export { JumpDetector } from './core/filters/JumpDetector.js';
 export type { Detectable, JumpResult } from './core/filters/JumpDetector.js';
+
+export { GroundContact } from './core/GroundContact.js';
+export type { Constrainable } from './core/GroundContact.js';
 
 export type {
   Vector3,

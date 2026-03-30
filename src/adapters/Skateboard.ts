@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
 import type { SkateboardTick, SkateboardOptions } from '../core/types.js';
+import { MAX_LEAN_ANGLE } from './DeckLean.js';
+import { GroundContact } from '../core/GroundContact.js';
 import { PhysicsRig, type RigState } from './PhysicsRig.js';
 import type { Mountable, BoardRig } from './Mountable.js';
 import { SkateboardAsset } from './SkateboardAsset.js';
@@ -19,6 +21,26 @@ export interface Tickable {
 
 export interface Disposable {
   dispose(): void;
+}
+
+export interface DebugGroups {
+  root:              THREE.Group;
+  rearPitchPivot:    THREE.Group;
+  frontPitchPivot:   THREE.Group;
+  tailContactPivot:  THREE.Group;
+  noseContactPivot:  THREE.Group;
+  rollPivot:         THREE.Group;
+  flipGroup:         THREE.Group;
+  deckLeanGroup:     THREE.Group | null;
+  tailTip:            THREE.Vector3 | null;
+  noseTip:            THREE.Vector3 | null;
+  deckHalfThickness:  number;
+  tailContactAngle:   number;
+  noseContactAngle:   number;
+}
+
+export interface Debuggable {
+  debugGroups(): DebugGroups;
 }
 
 // ---------------------------------------------------------------------------
@@ -52,10 +74,14 @@ interface ResolvedOptions {
  *
  * Hierarchy:
  *   root (yaw) → jumpGroup (Y) → modelGroup (carve Y)
- *     → rearPitchPivot  (rotation.x = pitch>0 ? -pitch : 0, pivots at rear axle)
+ *     → rearPitchPivot  (pitch > 0, pivots at rear axle)
  *     → rearPitchInverse
- *     → frontPitchPivot (rotation.x = pitch<0 ? -pitch : 0, pivots at front axle)
+ *     → tailContactPivot  (overflow when tail touches ground)
+ *     → tailContactInverse
+ *     → frontPitchPivot (pitch < 0, pivots at front axle)
  *     → frontPitchInverse
+ *     → noseContactPivot  (overflow when nose touches ground)
+ *     → noseContactInverse
  *     → flipGroup (boardRoll Z, pivot at deck height)
  *         → flipInverse
  *             ├── deckLean.group (lean Z)  ← deck, griptape, bolts, baseplates
@@ -65,6 +91,12 @@ interface ResolvedOptions {
  * Pitch sign convention (matches IMU telemetry):
  *   pitch > 0 → nose up   (tail down, rear axle is fixed pivot)
  *   pitch < 0 → nose down (tail up,   front axle is fixed pivot)
+ *
+ * Ground contact:
+ *   When pitch exceeds the contact angle, the deck tip reaches Y = 0.
+ *   Beyond that angle the pitch pivot shifts from the truck axle to the
+ *   tip contact point, so the board rotates around the ground instead of
+ *   clipping through it.
  *
  * Usage:
  *   const board = new Skateboard();
@@ -76,31 +108,42 @@ interface ResolvedOptions {
  *     renderer.render(scene, camera);
  *   }
  */
-export class Skateboard implements Loadable, Tickable, Disposable {
+export class Skateboard implements Loadable, Tickable, Disposable, Debuggable {
   /**
    * Root Three.js group — add this to your scene.
    * Hierarchy: root (yaw) → jumpGroup (Y) → modelGroup (carve Y) → …
    */
   readonly root: THREE.Group;
 
-  private readonly jumpGroup:        THREE.Group;
-  private readonly modelGroup:       THREE.Group;
-  private readonly rearPitchPivot:   THREE.Group;
-  private readonly rearPitchInverse: THREE.Group;
-  private readonly frontPitchPivot:  THREE.Group;
-  private readonly frontPitchInverse: THREE.Group;
-  private readonly flipGroup:        THREE.Group;
-  private readonly flipInverse:      THREE.Group;
-  private readonly model:            Mountable;
+  private readonly jumpGroup:           THREE.Group;
+  private readonly modelGroup:          THREE.Group;
+  private readonly rearPitchPivot:      THREE.Group;
+  private readonly rearPitchInverse:    THREE.Group;
+  private readonly tailContactPivot:    THREE.Group;
+  private readonly tailContactInverse:  THREE.Group;
+  private readonly frontPitchPivot:     THREE.Group;
+  private readonly frontPitchInverse:   THREE.Group;
+  private readonly noseContactPivot:    THREE.Group;
+  private readonly noseContactInverse:  THREE.Group;
+  private readonly rollPivot:           THREE.Group;
+  private readonly rollInverse:         THREE.Group;
+  private readonly flipGroup:           THREE.Group;
+  private readonly flipInverse:         THREE.Group;
+  private readonly model:               Mountable;
 
   private rig: BoardRig | null = null;
 
-  private readonly physicsRig = new PhysicsRig();
+  private readonly physicsRig    = new PhysicsRig();
+  private readonly groundContact = new GroundContact();
 
   private isJumping    = false;
   private prevAirborne = false;
   private lastTime: number | null = null;
   private currentPitch = 0;
+
+  /** Contact angle thresholds — Infinity when the adapter does not provide tip data. */
+  private tailContactAngle = Infinity;
+  private noseContactAngle = Infinity;
 
   private readonly options: ResolvedOptions;
 
@@ -116,20 +159,31 @@ export class Skateboard implements Loadable, Tickable, Disposable {
       truckColor: this.options.truckColor,
     });
 
-    this.root              = new THREE.Group();
-    this.jumpGroup         = new THREE.Group();
-    this.modelGroup        = new THREE.Group();
-    this.rearPitchPivot    = new THREE.Group();
-    this.rearPitchInverse  = new THREE.Group();
-    this.frontPitchPivot   = new THREE.Group();
-    this.frontPitchInverse = new THREE.Group();
-    this.flipGroup         = new THREE.Group();
-    this.flipInverse       = new THREE.Group();
+    this.root                = new THREE.Group();
+    this.jumpGroup           = new THREE.Group();
+    this.modelGroup          = new THREE.Group();
+    this.rearPitchPivot      = new THREE.Group();
+    this.rearPitchInverse    = new THREE.Group();
+    this.tailContactPivot    = new THREE.Group();
+    this.tailContactInverse  = new THREE.Group();
+    this.frontPitchPivot     = new THREE.Group();
+    this.frontPitchInverse   = new THREE.Group();
+    this.noseContactPivot    = new THREE.Group();
+    this.noseContactInverse  = new THREE.Group();
+    this.rollPivot           = new THREE.Group();
+    this.rollInverse         = new THREE.Group();
+    this.flipGroup           = new THREE.Group();
+    this.flipInverse         = new THREE.Group();
 
     this.flipGroup.add(this.flipInverse);
-    this.frontPitchInverse.add(this.flipGroup);
+    this.rollPivot.add(this.rollInverse);
+    this.noseContactInverse.add(this.flipGroup);
+    this.noseContactPivot.add(this.noseContactInverse);
+    this.frontPitchInverse.add(this.noseContactPivot);
     this.frontPitchPivot.add(this.frontPitchInverse);
-    this.rearPitchInverse.add(this.frontPitchPivot);
+    this.tailContactInverse.add(this.frontPitchPivot);
+    this.tailContactPivot.add(this.tailContactInverse);
+    this.rearPitchInverse.add(this.tailContactPivot);
     this.rearPitchPivot.add(this.rearPitchInverse);
     this.modelGroup.add(this.rearPitchPivot);
     this.jumpGroup.add(this.modelGroup);
@@ -143,9 +197,16 @@ export class Skateboard implements Loadable, Tickable, Disposable {
   async load(): Promise<void> {
     this.rig = await this.model.mount(this.flipInverse);
 
+    // Reparent deckLean.group into the roll pivot chain so that only the
+    // deck assembly leans — trucks stay flat in flipInverse space.
+    const deckY = this.rig.deckLean.group.position.y;
+    this.rollInverse.add(this.rig.deckLean.group);
+    this.flipInverse.add(this.rollPivot);
+    this.rollPivot.position.y   =  deckY;
+    this.rollInverse.position.y = -deckY;
+
     // Position the flip pivot at deck-lean height so boardRoll rotates the
     // board around its own longitudinal centre, not the ground.
-    const deckY = this.rig.deckLean.group.position.y;
     this.flipGroup.position.y   =  deckY;
     this.flipInverse.position.y = -deckY;
 
@@ -158,6 +219,24 @@ export class Skateboard implements Loadable, Tickable, Disposable {
     this.rearPitchInverse.position.set(0, -rearPos.y, -rearPos.z);
     this.frontPitchPivot.position.set(0,  frontPos.y,  frontPos.z);
     this.frontPitchInverse.position.set(0, -frontPos.y, -frontPos.z);
+
+    // Ground contact pivots — positioned at the tip rest positions so that
+    // when the pitch rotation brings the tip to Y = 0, additional rotation
+    // happens around the ground contact point.
+    if (this.rig.tailTip) {
+      this.tailContactAngle = this.groundContact.contactAngle(
+        rearPos.y, rearPos.z, this.rig.tailTip.y, this.rig.tailTip.z,
+      );
+      this.tailContactPivot.position.set(0,  this.rig.tailTip.y,  this.rig.tailTip.z);
+      this.tailContactInverse.position.set(0, -this.rig.tailTip.y, -this.rig.tailTip.z);
+    }
+    if (this.rig.noseTip) {
+      this.noseContactAngle = this.groundContact.contactAngle(
+        frontPos.y, frontPos.z, this.rig.noseTip.y, this.rig.noseTip.z,
+      );
+      this.noseContactPivot.position.set(0,  this.rig.noseTip.y,  this.rig.noseTip.z);
+      this.noseContactInverse.position.set(0, -this.rig.noseTip.y, -this.rig.noseTip.z);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -186,19 +265,107 @@ export class Skateboard implements Loadable, Tickable, Disposable {
   }
 
   // ---------------------------------------------------------------------------
+  // Debuggable
+  // ---------------------------------------------------------------------------
+
+  debugGroups(): DebugGroups {
+    return {
+      root:              this.root,
+      rearPitchPivot:    this.rearPitchPivot,
+      frontPitchPivot:   this.frontPitchPivot,
+      tailContactPivot:  this.tailContactPivot,
+      noseContactPivot:  this.noseContactPivot,
+      rollPivot:         this.rollPivot,
+      flipGroup:         this.flipGroup,
+      deckLeanGroup:     this.rig?.deckLean.group ?? null,
+      tailTip:            this.rig?.tailTip ?? null,
+      noseTip:            this.rig?.noseTip ?? null,
+      deckHalfThickness:  this.rig?.deckHalfThickness ?? 0.008,
+      tailContactAngle:   this.tailContactAngle,
+      noseContactAngle:  this.noseContactAngle,
+    };
+  }
+
+  /**
+   * Live-adjusts a tip position and recomputes the contact angle.
+   * Use this from a debug UI to find the correct offset values, then
+   * hardcode them in the adapter constants.
+   */
+  tuneTip(which: 'tail' | 'nose', y: number, z: number): void {
+    if (which === 'tail') {
+      const rearPos = this.rearPitchPivot.position;
+      this.tailContactPivot.position.set(0, y, z);
+      this.tailContactInverse.position.set(0, -y, -z);
+      this.tailContactAngle = this.groundContact.contactAngle(rearPos.y, rearPos.z, y, z);
+      if (this.rig?.tailTip) this.rig.tailTip.set(0, y, z);
+    } else {
+      const frontPos = this.frontPitchPivot.position;
+      this.noseContactPivot.position.set(0, y, z);
+      this.noseContactInverse.position.set(0, -y, -z);
+      this.noseContactAngle = this.groundContact.contactAngle(frontPos.y, frontPos.z, y, z);
+      if (this.rig?.noseTip) this.rig.noseTip.set(0, y, z);
+    }
+  }
+
+  /**
+   * Live-adjusts the roll pivot height. Updates rollPivot, rollInverse,
+   * flipGroup and flipInverse so the rotation centre moves without
+   * shifting the deck rest position.
+   */
+  tuneRollPivot(y: number): void {
+    this.rollPivot.position.y   =  y;
+    this.rollInverse.position.y = -y;
+    this.flipGroup.position.y   =  y;
+    this.flipInverse.position.y = -y;
+  }
+
+  // ---------------------------------------------------------------------------
   // Private — orientation
   // ---------------------------------------------------------------------------
 
   private applyOrientation(data: SkateboardTick, dt: number): void {
-    this.rig?.deckLean.lean(data.roll, 0, dt);
+    // Roll — smoothed & clamped, applied to rollPivot (decoupled from deck position).
+    const clampedRoll = Math.max(-MAX_LEAN_ANGLE, Math.min(MAX_LEAN_ANGLE, data.roll));
+    const rollFactor  = 1 - Math.pow(0.001, dt * 6);
+    this.rollPivot.rotation.z = THREE.MathUtils.lerp(this.rollPivot.rotation.z, clampedRoll, rollFactor);
 
     // Smooth pitch then distribute to the correct axle pivot.
-    // pitch > 0 → nose up  → rear axle fixed: rearPitchPivot.rotation.x = -pitch
-    // pitch < 0 → nose down → front axle fixed: frontPitchPivot.rotation.x = -pitch
     const pitchFactor = 1 - Math.pow(0.001, dt * 6);
     this.currentPitch = THREE.MathUtils.lerp(this.currentPitch, data.pitch, pitchFactor);
-    this.rearPitchPivot.rotation.x  = this.currentPitch > 0 ? -this.currentPitch : 0;
-    this.frontPitchPivot.rotation.x = this.currentPitch < 0 ? -this.currentPitch : 0;
+
+    if (this.currentPitch > 0) {
+      // Nose up — rear axle pivot, possibly constrained by tail contact.
+      const skipConstraint = data.airborne || this.tailContactAngle === Infinity;
+      if (!skipConstraint && this.currentPitch > this.tailContactAngle) {
+        const [pivot, overflow] = this.groundContact.constrain(this.currentPitch, this.tailContactAngle);
+        this.rearPitchPivot.rotation.x   = -pivot;
+        this.tailContactPivot.rotation.x = -overflow;
+      } else {
+        this.rearPitchPivot.rotation.x   = -this.currentPitch;
+        this.tailContactPivot.rotation.x = 0;
+      }
+      this.frontPitchPivot.rotation.x  = 0;
+      this.noseContactPivot.rotation.x = 0;
+    } else if (this.currentPitch < 0) {
+      // Nose down — front axle pivot, possibly constrained by nose contact.
+      const absPitch = -this.currentPitch;
+      const skipConstraint = data.airborne || this.noseContactAngle === Infinity;
+      if (!skipConstraint && absPitch > this.noseContactAngle) {
+        const [pivot, overflow] = this.groundContact.constrain(absPitch, this.noseContactAngle);
+        this.frontPitchPivot.rotation.x  = pivot;
+        this.noseContactPivot.rotation.x = overflow;
+      } else {
+        this.frontPitchPivot.rotation.x  = -this.currentPitch;
+        this.noseContactPivot.rotation.x = 0;
+      }
+      this.rearPitchPivot.rotation.x   = 0;
+      this.tailContactPivot.rotation.x = 0;
+    } else {
+      this.rearPitchPivot.rotation.x   = 0;
+      this.tailContactPivot.rotation.x = 0;
+      this.frontPitchPivot.rotation.x  = 0;
+      this.noseContactPivot.rotation.x = 0;
+    }
 
     const yawFactor = 1 - Math.pow(0.001, dt * 3);
     this.root.rotation.y = THREE.MathUtils.lerp(
@@ -263,6 +430,8 @@ export class Skateboard implements Loadable, Tickable, Disposable {
     }
 
     this.prevAirborne = data.airborne;
+
+    this.jumpGroup.position.y = Math.max(0, this.jumpGroup.position.y);
   }
 
   private triggerJump(peakHeight: number): void {

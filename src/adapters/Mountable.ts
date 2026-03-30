@@ -20,6 +20,12 @@ export interface BoardRig {
   frontTruck:      THREE.Group;
   /** Optional per-frame truck accessory animation (bushings, hanger drift) */
   truckAnimation?: TruckAnimatable;
+  /** Tail tip position in model-local space (bottom of deck at tail extremity) */
+  tailTip?: THREE.Vector3;
+  /** Nose tip position in model-local space (bottom of deck at nose extremity) */
+  noseTip?: THREE.Vector3;
+  /** Half-thickness of the deck (radius for debug contact spheres) */
+  deckHalfThickness?: number;
 }
 
 // ---------------------------------------------------------------------------
