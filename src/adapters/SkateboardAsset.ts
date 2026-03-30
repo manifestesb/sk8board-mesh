@@ -7,7 +7,7 @@ import { DeckLean } from './DeckLean.js';
 // ---------------------------------------------------------------------------
 // Asset imports — resolved by Vite (or compatible bundler) at build time
 // ---------------------------------------------------------------------------
-import gltfUrl        from '../assets/skateboard.gltf?url';
+import gltfUrl        from '../assets/skateboard/skateboard.gltf?url';
 import gripDiffuseUrl from '../assets/skateboard/griptape-diffuse.webp?url';
 import gripRoughUrl   from '../assets/skateboard/griptape-roughness.webp?url';
 import metalNormalUrl from '../assets/skateboard/metal-normal.avif?url';
