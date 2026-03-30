@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { Skateboard, SkateboardAsset, SkatieAsset, warehouseHdrUrl, skatieOrangeUrl } from '@manifeste/sk8board';
+import { Skateboard, SkateboardAsset, SkatieAsset, warehouseHdrUrl } from '@manifeste/sk8board';
 
 // ---------------------------------------------------------------------------
 // Renderer
@@ -100,7 +100,6 @@ const SKINS: Record<ModelId, SkinOption[]> = {
   ],
   skatie: [
     { value: 'default', label: 'Default' },
-    { value: 'orange',  label: 'Orange',  skinUrl: skatieOrangeUrl },
   ],
 };
 

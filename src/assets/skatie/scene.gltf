@@ -1772,9 +1772,6 @@
   ],
   "images": [
     {
-      "uri": "textures/skatie_manifeste.png"
-    },
-    {
       "uri": "textures/skatie_baseColor.png"
     },
     {
@@ -1782,9 +1779,6 @@
     },
     {
       "uri": "textures/skatie_normal.png"
-    },
-    {
-      "uri": "textures/skatie_orange.png"
     }
   ],
   "materials": [

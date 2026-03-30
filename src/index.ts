@@ -26,4 +26,3 @@ export type {
 
 // Asset URLs — resolved by Vite at build time, available to consumers
 export { default as warehouseHdrUrl  } from './assets/hdr/warehouse-256.hdr?url';
-export { default as skatieOrangeUrl  } from './assets/skatie/textures/skatie_orange.png?url';
