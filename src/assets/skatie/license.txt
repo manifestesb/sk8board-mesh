@@ -1,0 +1,11 @@
+Model Information:
+* title:	Skatie
+* source:	https://sketchfab.com/3d-models/skatie-ae3181c81cf34876b187b353291a2f96
+* author:	Kaye (https://sketchfab.com/kaye-simonson)
+
+Model License:
+* license type:	CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/)
+* requirements:	Author must be credited. No commercial use.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Skatie" (https://sketchfab.com/3d-models/skatie-ae3181c81cf34876b187b353291a2f96) by Kaye (https://sketchfab.com/kaye-simonson) licensed under CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/)
