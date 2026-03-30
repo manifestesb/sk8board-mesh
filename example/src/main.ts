@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { Skateboard, SkateboardAsset, SkatieAsset, warehouseHdrUrl } from '@manifeste/sk8board';
+import { Skateboard, SkateboardAsset, SkatieAsset, PivotDebug, warehouseHdrUrl } from '@manifeste/sk8board';
 
 // ---------------------------------------------------------------------------
 // Renderer
@@ -127,8 +127,12 @@ function populateTextures(modelId: ModelId): void {
 // Model loader
 // ---------------------------------------------------------------------------
 
+let debug: PivotDebug | null = null;
+const debugActive = new Set<'pitch' | 'roll' | 'yaw' | 'tips'>();
+
 async function loadModel(modelId: ModelId, skinValue: string): Promise<void> {
   if (board.root.parent === scene) scene.remove(board.root);
+  debug?.dispose();
   board.dispose();
 
   const skin = SKINS[modelId].find((s) => s.value === skinValue) ?? SKINS[modelId][0];
@@ -140,6 +144,9 @@ async function loadModel(modelId: ModelId, skinValue: string): Promise<void> {
 
   board = new Skateboard({ truckColor, defaultJumpHeight: 0.8 }, asset);
   await board.load();
+
+  debug = new PivotDebug(board);
+  for (const layer of debugActive) debug.show(layer);
 
   scene.add(board.root);
 }
@@ -215,6 +222,117 @@ ctrlAir.addEventListener('click', () => {
   airborne = !airborne;
   ctrlAir.classList.toggle('active', airborne);
 });
+
+// ---------------------------------------------------------------------------
+// Debug axis selector + contextual tuning sliders
+// ---------------------------------------------------------------------------
+
+interface SliderDef {
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  apply: (v: number) => void;
+}
+
+// Fixed constants from SkateboardAsset (not tunable)
+const DECK_PIVOT_Y  = 0.141;
+const DECK_OFFSET_Y = 0.130;
+const DECK_OFFSET_Z = -0.002;
+
+// Mutable tuning state (survives axis switches)
+const tuneState: Record<string, number> = {
+  DECK_Y_MIN: -0.051,
+  DECK_Z_MIN: -1.163,
+  DECK_Z_MAX:  1.163,
+  DECK_PIVOT_Y: 0.141,
+};
+
+function pitchSliders(): SliderDef[] {
+  return [
+    { label: 'DECK_Y_MIN', min: -0.15, max: 0.15, step: 0.001, value: tuneState.DECK_Y_MIN,
+      apply(v) { tuneState.DECK_Y_MIN = v; applyTipTune(); } },
+    { label: 'DECK_Z_MIN', min: -1.5, max: -0.5, step: 0.001, value: tuneState.DECK_Z_MIN,
+      apply(v) { tuneState.DECK_Z_MIN = v; applyTipTune(); } },
+    { label: 'DECK_Z_MAX', min: 0.5, max: 1.5, step: 0.001, value: tuneState.DECK_Z_MAX,
+      apply(v) { tuneState.DECK_Z_MAX = v; applyTipTune(); } },
+  ];
+}
+
+function rollSliders(): SliderDef[] {
+  return [
+    { label: 'DECK_PIVOT_Y', min: 0.05, max: 0.3, step: 0.001, value: tuneState.DECK_PIVOT_Y,
+      apply(v) {
+        tuneState.DECK_PIVOT_Y = v;
+        board.tuneRollPivot(v);
+      } },
+  ];
+}
+
+const SLIDERS_BY_AXIS: Record<string, () => SliderDef[]> = {
+  pitch: pitchSliders,
+  roll:  rollSliders,
+  tips:  pitchSliders,
+};
+
+function applyTipTune(): void {
+  const tipY  = DECK_PIVOT_Y + DECK_OFFSET_Y + tuneState.DECK_Y_MIN;
+  const tailZ = DECK_OFFSET_Z + tuneState.DECK_Z_MIN;
+  const noseZ = DECK_OFFSET_Z + tuneState.DECK_Z_MAX;
+  board.tuneTip('tail', tipY, tailZ);
+  board.tuneTip('nose', tipY, noseZ);
+  if (debugActive.has('tips')) { debug?.hide('tips'); debug?.show('tips'); }
+  if (debugActive.has('pitch')) { debug?.hide('pitch'); debug?.show('pitch'); }
+}
+
+const tunePanel = document.getElementById('tune-panel')!;
+let selectedAxis: string | null = null;
+
+function renderTunePanel(axis: string | null): void {
+  tunePanel.innerHTML = '';
+  if (!axis || !SLIDERS_BY_AXIS[axis]) return;
+  for (const def of SLIDERS_BY_AXIS[axis]()) {
+    const label = document.createElement('label');
+    const name = document.createTextNode(def.label + ' ');
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = String(def.min);
+    input.max = String(def.max);
+    input.step = String(def.step);
+    input.value = String(def.value);
+    input.style.cssText = 'accent-color:#b8fc39;width:120px';
+    const span = document.createElement('span');
+    span.style.cssText = 'color:#fff;min-width:52px';
+    span.textContent = def.value.toFixed(3);
+    input.addEventListener('input', () => {
+      const v = parseFloat(input.value);
+      span.textContent = v.toFixed(3);
+      def.apply(v);
+    });
+    label.append(name, input, span);
+    tunePanel.appendChild(label);
+  }
+}
+
+for (const layer of ['pitch', 'roll', 'yaw', 'tips'] as const) {
+  const btn = document.getElementById(`dbg-${layer}`) as HTMLButtonElement;
+  btn.addEventListener('click', () => {
+    // Toggle debug visibility
+    if (debugActive.has(layer)) {
+      debugActive.delete(layer);
+      debug?.hide(layer);
+      btn.classList.remove('active');
+    } else {
+      debugActive.add(layer);
+      debug?.show(layer);
+      btn.classList.add('active');
+    }
+    // Select axis for tuning panel
+    selectedAxis = debugActive.has(layer) ? layer : null;
+    renderTunePanel(selectedAxis);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Camera controls
