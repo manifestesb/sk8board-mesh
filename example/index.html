@@ -38,26 +38,66 @@
     #controls label { display: flex; align-items: center; gap: 8px; }
     #controls input[type="range"] { accent-color: #b8fc39; width: 120px; }
     #controls span { color: #fff; min-width: 52px; }
+    #controls select {
+      background: #1a1a2e; color: #b8fc39; border: 1px solid #b8fc39;
+      font-family: monospace; font-size: 12px; padding: 2px 4px; cursor: pointer;
+    }
+    #controls button {
+      background: #1a1a2e; color: #b8fc39; border: 1px solid #b8fc39;
+      font-family: monospace; font-size: 12px; padding: 2px 8px; cursor: pointer;
+    }
+    #controls button.active { background: #b8fc39; color: #1a1a2e; }
   </style>
 </head>
 <body>
   <div id="hud">
-    roll:    <span id="v-roll">0.000</span> rad<br>
-    pitch:   <span id="v-pitch">0.000</span> rad<br>
-    yaw:     <span id="v-yaw">0.000</span> rad<br>
+    carve Z: <span id="v-carve">0.000</span> rad<br>
+    flip  Z: <span id="v-flip">0°</span><br>
+    pitch X: <span id="v-pitch">0°</span><br>
+    yaw   Y: <span id="v-yaw">0.000</span> rad<br>
     speed:   <span id="v-speed">0.000</span> m/s<br>
     airborne:<span id="v-air">false</span>
   </div>
   <div id="controls">
+    <label>
+      model
+      <select id="ctrl-model">
+        <option value="skateboard">Skateboard</option>
+        <option value="skatie">Skatie (CC-BY-NC-4.0)</option>
+      </select>
+    </label>
+    <label>
+      skin
+      <select id="ctrl-texture"></select>
+    </label>
     <label>
       speed
       <input id="ctrl-speed" type="range" min="0" max="10" step="0.1" value="0" />
       <span id="ctrl-speed-val">0.0 m/s</span>
     </label>
     <label>
-      roll
-      <input id="ctrl-roll" type="range" min="-0.23" max="0.23" step="0.01" value="0" />
-      <span id="ctrl-roll-val">0.00 rad</span>
+      carve Z
+      <input id="ctrl-carve" type="range" min="-0.23" max="0.23" step="0.01" value="0" />
+      <span id="ctrl-carve-val">0.00 rad</span>
+    </label>
+    <label>
+      flip Z ✈
+      <input id="ctrl-flip" type="range" min="0" max="6.283" step="0.05" value="0" />
+      <span id="ctrl-flip-val">0°</span>
+    </label>
+    <label>
+      pitch X
+      <input id="ctrl-pitch" type="range" min="-3.14" max="3.14" step="0.05" value="0" />
+      <span id="ctrl-pitch-val">0°</span>
+    </label>
+    <label>
+      yaw Y
+      <input id="ctrl-yaw" type="range" min="-3.14" max="3.14" step="0.01" value="0" />
+      <span id="ctrl-yaw-val">0.00 rad</span>
+    </label>
+    <label>
+      airborne
+      <button id="ctrl-air">jump</button>
     </label>
   </div>
   <script type="module" src="/src/main.ts"></script>
