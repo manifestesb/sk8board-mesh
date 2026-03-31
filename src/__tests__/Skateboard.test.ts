@@ -91,9 +91,9 @@ function makeFakeMountable(withTips = false): Mountable {
 //   root[0][0][0][0][0][0][0][0][0][0][0][0]      = flipInverse
 //
 //   After load(), flipInverse has children:
-//     [0] = rollPivot → rollInverse → deckLean.group
-//     [1] = rearTruck
-//     [2] = frontTruck
+//     [0] = rearTruck    (flat, steers on Y)
+//     [1] = frontTruck   (flat, steers on Y)
+//     [2] = rollPivot → rollInverse → deckLean.group
 // ---------------------------------------------------------------------------
 
 type C = { children: THREE.Object3D[] };
@@ -111,7 +111,7 @@ function getNoseContactPivot(board: Skateboard)   { return c(getFrontPitchInvers
 function getNoseContactInverse(board: Skateboard) { return c(getNoseContactPivot(board)) as THREE.Group; }
 function getFlipGroup(board: Skateboard)          { return c(getNoseContactInverse(board)) as THREE.Group; }
 function getFlipInverse(board: Skateboard)        { return c(getFlipGroup(board)) as THREE.Group; }
-/** rollPivot is a branch inside flipInverse (added in load, not in the linear chain).
+/** rollPivot is a branch inside flipInverse (added in load).
  *  After load: flipInverse.children = [rearTruck, frontTruck, rollPivot] */
 function getRollPivot(board: Skateboard)          { return getFlipInverse(board).children[2] as THREE.Group; }
 function getRollInverse(board: Skateboard)        { return c(getRollPivot(board)) as THREE.Group; }
@@ -208,10 +208,12 @@ describe('Skateboard', () => {
       await expect(board.load()).resolves.toBeUndefined();
     });
 
-    it('adds rollPivot, rearTruck, frontTruck to flipInverse after load', async () => {
+    it('adds rearTruck, frontTruck and rollPivot to flipInverse after load', async () => {
       await board.load();
-      // rollPivot (containing deckLean.group) + rearTruck + frontTruck
+      // rearTruck + frontTruck + rollPivot
       expect(getFlipInverse(board).children.length).toBe(3);
+      // rollInverse contains only deckLean.group
+      expect(getRollInverse(board).children.length).toBe(1);
     });
   });
 
@@ -327,9 +329,9 @@ describe('Skateboard', () => {
     });
 
     it('no steer when roll is zero', () => {
-      const flipInverse = getFlipInverse(board);
-      const rearGroup   = flipInverse.children[0] as THREE.Group; // rearTruck
-      const frontGroup  = flipInverse.children[1] as THREE.Group; // frontTruck
+      const flipInv    = getFlipInverse(board);
+      const rearGroup  = flipInv.children[0] as THREE.Group; // rearTruck
+      const frontGroup = flipInv.children[1] as THREE.Group; // frontTruck
 
       board.tick(makeTick({ roll: 0 }), 0);
       board.tick(makeTick({ roll: 0 }), 100);
@@ -351,9 +353,9 @@ describe('Skateboard', () => {
     });
 
     it('front and rear steer are symmetric (frontY === -rearY)', () => {
-      const flipInverse = getFlipInverse(board);
-      const rearGroup   = flipInverse.children[0] as THREE.Group; // rearTruck
-      const frontGroup  = flipInverse.children[1] as THREE.Group; // frontTruck
+      const flipInv    = getFlipInverse(board);
+      const rearGroup  = flipInv.children[0] as THREE.Group; // rearTruck
+      const frontGroup = flipInv.children[1] as THREE.Group; // frontTruck
 
       board.tick(makeTick({ roll: 0.3 }), 0);
 

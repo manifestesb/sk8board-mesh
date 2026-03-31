@@ -41,6 +41,7 @@ const DEFAULT_TRUCK_ANGLE = 50;
 
 export class PhysicsRig implements Simulatable {
   private readonly truckSteering = new TruckSteering({ truckAngle: DEFAULT_TRUCK_ANGLE });
+  private steerScale = STEER_SCALE;
 
   simulate(tick: SkateboardTick, _dt: number): RigState {
     const wheelAngularVelocity = tick.airborne
@@ -48,9 +49,14 @@ export class PhysicsRig implements Simulatable {
       : Math.max(tick.speed, IDLE_SPEED) / REAL_WHEEL_RADIUS;
 
     const carveAngle = tick.roll * CARVE_SCALE;
-    const steerAngle = this.truckSteering.steer(tick.roll) * STEER_SCALE;
+    const steerAngle = this.truckSteering.steer(tick.roll) * this.steerScale;
 
     return { wheelAngularVelocity, carveAngle, steerAngle };
+  }
+
+  /** Live-adjust the steer visual scale for debug tuning. */
+  tuneSteerScale(scale: number): void {
+    this.steerScale = scale;
   }
 
   reset(): void {}

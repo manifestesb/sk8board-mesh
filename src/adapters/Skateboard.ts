@@ -32,6 +32,8 @@ export interface DebugGroups {
   rollPivot:         THREE.Group;
   flipGroup:         THREE.Group;
   deckLeanGroup:     THREE.Group | null;
+  rearTruck:         THREE.Group | null;
+  frontTruck:        THREE.Group | null;
   tailTip:            THREE.Vector3 | null;
   noseTip:            THREE.Vector3 | null;
   deckHalfThickness:  number;
@@ -140,6 +142,8 @@ export class Skateboard implements Loadable, Tickable, Disposable, Debuggable {
   private prevAirborne = false;
   private lastTime: number | null = null;
   private currentPitch = 0;
+  private rearSteer    = 0;
+  private frontSteer   = 0;
 
   /** Contact angle thresholds — Infinity when the adapter does not provide tip data. */
   private tailContactAngle = Infinity;
@@ -197,8 +201,9 @@ export class Skateboard implements Loadable, Tickable, Disposable, Debuggable {
   async load(): Promise<void> {
     this.rig = await this.model.mount(this.flipInverse);
 
-    // Reparent deckLean.group into the roll pivot chain so that only the
-    // deck assembly leans — trucks stay flat in flipInverse space.
+    // Only the deck assembly leans — trucks stay flat in flipInverse so
+    // their wheels remain on the ground. Steering (rotation.y) is applied
+    // independently on each truck group.
     const deckY = this.rig.deckLean.group.position.y;
     this.rollInverse.add(this.rig.deckLean.group);
     this.flipInverse.add(this.rollPivot);
@@ -251,7 +256,7 @@ export class Skateboard implements Loadable, Tickable, Disposable, Debuggable {
     this.applyOrientation(data, dt);
     this.applyBoardRoll(data);
     this.spinWheels(rig.wheelAngularVelocity, dt);
-    this.applyCarve(rig);
+    this.applyCarve(rig, dt, data.airborne);
     this.updateJump(data);
   }
 
@@ -278,6 +283,8 @@ export class Skateboard implements Loadable, Tickable, Disposable, Debuggable {
       rollPivot:         this.rollPivot,
       flipGroup:         this.flipGroup,
       deckLeanGroup:     this.rig?.deckLean.group ?? null,
+      rearTruck:         this.rig?.rearTruck ?? null,
+      frontTruck:        this.rig?.frontTruck ?? null,
       tailTip:            this.rig?.tailTip ?? null,
       noseTip:            this.rig?.noseTip ?? null,
       deckHalfThickness:  this.rig?.deckHalfThickness ?? 0.008,
@@ -305,6 +312,13 @@ export class Skateboard implements Loadable, Tickable, Disposable, Debuggable {
       this.noseContactAngle = this.groundContact.contactAngle(frontPos.y, frontPos.z, y, z);
       if (this.rig?.noseTip) this.rig.noseTip.set(0, y, z);
     }
+  }
+
+  /**
+   * Live-adjusts the steer visual scale for debug tuning.
+   */
+  tuneSteerScale(scale: number): void {
+    this.physicsRig.tuneSteerScale(scale);
   }
 
   /**
@@ -397,13 +411,25 @@ export class Skateboard implements Loadable, Tickable, Disposable, Debuggable {
   // Private — carve
   // ---------------------------------------------------------------------------
 
-  private applyCarve(rig: RigState): void {
+  private applyCarve(rig: RigState, dt: number, airborne: boolean): void {
     if (this.rig) {
-      // Steer: front truck −θ, rear truck +θ (opposite directions; sign validated
-      // against Three.js Y-axis convention where positive = counter-clockwise from above)
-      this.rig.frontTruck.rotation.y = -rig.steerAngle;
-      this.rig.rearTruck.rotation.y  =  rig.steerAngle;
-      this.rig.truckAnimation?.animate(rig.steerAngle, this.rig.deckLean.group.rotation.z);
+      // A truck only steers when its wheels touch the ground — the rider's
+      // weight compresses the bushing. When airborne or in manual, the
+      // bushing decompresses and the steer angle springs back to centre.
+      const rearGrounded  = !airborne && !(this.currentPitch < 0 && -this.currentPitch > this.noseContactAngle);
+      const frontGrounded = !airborne && !(this.currentPitch > 0 && this.currentPitch > this.tailContactAngle);
+
+      const rearTarget  = rearGrounded  ?  rig.steerAngle : 0;
+      const frontTarget = frontGrounded ? -rig.steerAngle : 0;
+
+      const factor = 1 - Math.pow(0.001, dt * 6);
+      this.rearSteer  = THREE.MathUtils.lerp(this.rearSteer,  rearTarget,  factor);
+      this.frontSteer = THREE.MathUtils.lerp(this.frontSteer, frontTarget, factor);
+
+      this.rig.rearTruck.rotation.y  = this.rearSteer;
+      this.rig.frontTruck.rotation.y = this.frontSteer;
+
+      this.rig.truckAnimation?.animate(rig.steerAngle, this.rollPivot.rotation.z);
     }
 
     this.modelGroup.rotation.y = rig.carveAngle;

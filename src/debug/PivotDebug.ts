@@ -16,8 +16,9 @@ const COLOR_YAW      = 0x33ff33;
 const COLOR_CONTACT  = 0xff8833;
 const COLOR_TAIL     = 0xffff33;
 const COLOR_NOSE     = 0x33ffff;
+const COLOR_STEER    = 0xff33ff;
 
-type Layer = 'pitch' | 'roll' | 'yaw' | 'tips';
+type Layer = 'pitch' | 'roll' | 'yaw' | 'tips' | 'steer';
 
 // ---------------------------------------------------------------------------
 // PivotDebug
@@ -53,6 +54,7 @@ export class PivotDebug {
       case 'roll':   this.buildRoll(objects);  break;
       case 'yaw':    this.buildYaw(objects);   break;
       case 'tips':   this.buildTips(objects);  break;
+      case 'steer':  this.buildSteer(objects); break;
     }
 
     this.helpers.set(layer, objects);
@@ -109,6 +111,18 @@ export class PivotDebug {
   private buildYaw(out: THREE.Object3D[]): void {
     this.addSphere(this.groups.root, COLOR_YAW, out);
     this.addAxisLine(this.groups.root, 'y', COLOR_YAW, out);
+  }
+
+  private buildSteer(out: THREE.Object3D[]): void {
+    const g = this.groups;
+    if (g.rearTruck) {
+      this.addSphere(g.rearTruck, COLOR_STEER, out);
+      this.addAxisLine(g.rearTruck, 'y', COLOR_STEER, out);
+    }
+    if (g.frontTruck) {
+      this.addSphere(g.frontTruck, COLOR_STEER, out);
+      this.addAxisLine(g.frontTruck, 'y', COLOR_STEER, out);
+    }
   }
 
   private buildTips(out: THREE.Object3D[]): void {

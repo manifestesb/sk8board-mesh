@@ -194,6 +194,16 @@ export class SkatieAsset implements Mountable {
       });
     }
 
-    return { deckLean, wheels, rearTruck, frontTruck, truckAnimation };
+    // Compute deck tip positions from the assembled scene bounding box.
+    // After scale and rotation, the long axis (Z) holds tail/nose extremes.
+    modelGroup.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(sceneWrapper);
+    const tipY = box.min.y;
+
+    return {
+      deckLean, wheels, rearTruck, frontTruck, truckAnimation,
+      tailTip: new THREE.Vector3(0, tipY, box.min.z),
+      noseTip: new THREE.Vector3(0, tipY, box.max.z),
+    };
   }
 }
